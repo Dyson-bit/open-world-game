@@ -102,6 +102,10 @@ export function allocateGameData(gd, b, seed) {
   gd.carDent = new Float32Array(M * 4);        // SIDE-indexed accumulated dent 0..1
   gd.carLane = new Int32Array(M);              // AI lane index (-1 none)
   gd.carLaneT = new Float32Array(M);           // metres along lane
+  // added T8: the lane the AI has already decided to take at the end of carLane (-1 none). Chosen
+  // as soon as a lane is acquired so the lookahead can aim at it before the car gets there, which
+  // is what makes a traffic car cut the corner instead of driving to the kerb and then turning.
+  gd.carNextLane = new Int32Array(M);
   gd.carAiTimer = new Float32Array(M);         // stun / wait timer
   gd.carAiWait = new Float32Array(M);          // intersection wait accumulator
   gd.carBrakeLight = new Uint8Array(M);        // 0 off 1 brake 2 reverse

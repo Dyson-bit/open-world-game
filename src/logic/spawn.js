@@ -53,6 +53,7 @@ function resetCar(gd, b, i, type, paint, x, z, yaw, state) {
   gd.carDent[i * 4 + 2] = 0; gd.carDent[i * 4 + 3] = 0;
   gd.carLane[i] = -1;
   gd.carLaneT[i] = 0;
+  gd.carNextLane[i] = -1;      // T8: no route decided yet
   gd.carAiTimer[i] = 0;
   gd.carAiWait[i] = 0;
   gd.carBrakeLight[i] = 0;

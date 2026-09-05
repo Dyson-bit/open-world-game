@@ -5,7 +5,7 @@ import { PLAYER_MODE } from '../balance.js';
 import { generateCity } from './city.js';
 import { placeParkedCars, placeTraffic, manageTraffic } from './spawn.js';
 import { updatePlayer } from './player.js';
-import { updateTraffic } from './traffic.js';
+import { updateTraffic, reactToImpacts } from './traffic.js';
 import { integrateCars } from './vehicle.js';
 import { resolveCollisions } from './collision.js';
 import { updateProps } from './props.js';
@@ -75,6 +75,10 @@ export function tick(gd, b) {
   resolveCollisions(gd, b);
   updateProps(gd, b);
   updateDamage(gd, b);
+  // T8: the AI reacts to this tick's impacts here, not in updateTraffic — that runs before
+  // resolveCollisions, when [impTickStart, impCount) is still empty. After updateDamage, so a car
+  // written off by the hit stays a WRECK instead of being "shaken".
+  reactToImpacts(gd, b);
   updateParticles(gd, b);
   manageTraffic(gd, b);
   updateCamera(gd, b);
