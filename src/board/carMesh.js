@@ -33,7 +33,8 @@ const BED = 0x3b3f47;           // pickup bed floor
 const SILL = 0x2a2d33;
 const GLASS_WRECK = 0x111111;
 const BRAKE_HOT = 0xfff1c0;     // reverse lights
-const WRECK_MIX = 0.7;
+const WRECK_MIX = 0.95;         // T9: the mix happens in LINEAR space, where 0.7 of the way from
+                                // a bright bus to charcoal still reads as rust rather than char
 const DENT_DARKEN = 0.88;       // a dented panel loses 12% of its colour
 const CENTRE_Y = 0.6;           // the body centre dents pull toward, and the impact plane's height
 const GLASS_RECESS = 0.03;      // how far the glass band sits inside the paint, per side

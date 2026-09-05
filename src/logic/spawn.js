@@ -60,6 +60,8 @@ function resetCar(gd, b, i, type, paint, x, z, yaw, state) {
   gd.carVisPitch[i] = 0; gd.carVisRoll[i] = 0;
   gd.carWheelSpin[i] = 0;
   gd.carSmokeAcc[i] = 0;
+  gd.carFireAcc[i] = 0;        // T9
+  gd.carDustAcc[i] = 0;        // T9
   gd.carPark[i] = -1;
   gd.skidActive[i * 2] = 0; gd.skidActive[i * 2 + 1] = 0;
   gd.carDirty[i] = 1;          // the Board must build (or rebuild) this car's geometry

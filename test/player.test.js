@@ -240,6 +240,7 @@ test('a wrecked car keeps its state when the player gets out', () => {
   tick(gd, b);
   gd.carHealth[i] = 0;
   gd.carState[i] = CAR_STATE.BURNING;
+  gd.carBurnTimer[i] = b.burnTime;      // T9: a BURNING car with no timer left explodes at once
   gd.input.action = 1;
   tick(gd, b);
   assert.equal(gd.carState[i], CAR_STATE.BURNING);
@@ -251,11 +252,13 @@ test('no car is ever left in the PLAYER state with nobody in it', () => {
   const i = parkNextToPlayer(gd, 2);
   gd.input.action = 1;
   tick(gd, b);
-  gd.carHealth[i] = 0;                            // dead but not yet turned into a wreck
+  gd.carHealth[i] = 0;                            // dead: exitCar parks it, then T9 sets it alight
   gd.input.action = 1;
   tick(gd, b);
   assert.equal(gd.playerCar, -1);
-  assert.equal(gd.carState[i], CAR_STATE.PARKED);
+  assert.notEqual(gd.carState[i], CAR_STATE.PLAYER, 'nobody is driving it');
+  // T9: updateDamage runs later in the same tick and starts the burn on the car exitCar parked.
+  assert.equal(gd.carState[i], CAR_STATE.BURNING);
 });
 
 // ------------------------------------------------------------------ flung / stunned

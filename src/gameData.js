@@ -112,6 +112,11 @@ export function allocateGameData(gd, b, seed) {
   gd.carVisPitch = new Float32Array(M); gd.carVisRoll = new Float32Array(M);
   gd.carWheelSpin = new Float32Array(M);
   gd.carSmokeAcc = new Float32Array(M);
+  // added T9: the other two fractional emitter accumulators. Each stream (smoke, flames, tyre and
+  // grass dust) runs at its own rate in particles per second, and at 60 Hz every one of those rates
+  // is a fraction of a particle per tick — so each needs its own carry, not one shared one.
+  gd.carFireAcc = new Float32Array(M);
+  gd.carDustAcc = new Float32Array(M);
   gd.carPark = new Int32Array(M);              // park spot index if parked (-1 none)
   gd.carCount = 0;
   // scratch: OBB corners and AABB per car, filled by collision each tick
