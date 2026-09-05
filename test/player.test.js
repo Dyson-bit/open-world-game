@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { balance, PLAYER_MODE, CAR_STATE } from '../src/balance.js';
+import { balance, PLAYER_MODE, CAR_STATE, PROP_STATE } from '../src/balance.js';
 import { allocateGameData } from '../src/gameData.js';
 import { startGame, tick } from '../src/logic/tick.js';
 import { spawnCar } from '../src/logic/spawn.js';
@@ -37,6 +37,13 @@ function tallestCollider(gd) {
 
 test('holding forward walks the player the way the camera faces', () => {
   const gd = fresh();
+  // T7: pushOutCircle now stops him at parked cars and street furniture too, and the pavement
+  // north of the spawn has a BUS lying across it — he walks into its flank after 4 m. This test is
+  // about camera-relative walking, so clear the street and let him have his one second of running.
+  // (manageTraffic only ever spawns beyond respawnMinDist, so nothing comes back inside a second.)
+  gd.carCount = 0;
+  gd.propState.fill(PROP_STATE.RESTING);
+
   // the camera forward at the moment the walk starts — startGame parks it behind the player
   let cfx = gd.camLookX - gd.camX, cfz = gd.camLookZ - gd.camZ;
   const cl = Math.hypot(cfx, cfz);

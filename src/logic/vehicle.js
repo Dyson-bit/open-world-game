@@ -89,7 +89,11 @@ export function integrateCar(gd, b, i, dt) {
   vF += aF * dt;
 
   // ---- lateral grip: the tyres scrub sideways velocity away, unless they let go ----
-  const slipping = handbrake !== 0 || (vL < 0 ? -vL : vL) > b.slipThreshold;
+  // T7: a wreck counts as permanently drifting. Without it the non-slipping branch below SNAPS
+  // yawRate to the (always zero) bicycle target, so a car spun round by a crash stopped rotating
+  // the instant it was written off. Drifting instead blends yawRate toward 0, so the wreck keeps
+  // turning for a second and slides on its dead tyres.
+  const slipping = wrecked || handbrake !== 0 || (vL < 0 ? -vL : vL) > b.slipThreshold;
   const grip = slipping ? b.carDriftGrip[T] : b.carGrip[T];
   let keep = 1 - grip * dt;
   if (keep < 0) keep = 0;
