@@ -82,6 +82,9 @@ export const balance = {
   dentPerStrength: 1 / 20,
 
   // ---- player ----
+  playerSpawnX: 11,          // added T1: where startGame drops the player (plaza-side pavement)
+  playerSpawnZ: 11,          // added T1
+  playerSpawnYaw: 0,         // added T1: facing +Z (south)
   playerRadius: 0.4,
   playerSpeed: 6.5,
   playerAccel: 30,
@@ -104,6 +107,8 @@ export const balance = {
   camSpring: 6,
   camShakeDecay: 4,
   camOrbitDecay: 1.5,
+  titleOrbitRadius: 70,      // added T1: title-card camera orbit around the plaza
+  titleOrbitHeight: 38,      // added T1
 
   // ---- particles ----
   particleGravity: 9,

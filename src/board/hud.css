@@ -1,0 +1,79 @@
+/* Joyride HUD. Base layout only in Task 1 — the panels themselves land in Task 8.
+   No external fonts, no images: everything must work offline. */
+
+:root {
+  --hud-ink: #fff6ec;
+  --hud-shadow: 0 2px 0 rgba(24, 14, 8, 0.55), 0 0 18px rgba(0, 0, 0, 0.35);
+  --hud-panel: rgba(24, 16, 12, 0.42);
+  --hud-accent: #ffc24a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffd6b0;
+  color: var(--hud-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#game {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  touch-action: none;
+  outline: none;
+}
+
+/* The HUD is a full-screen overlay; only interactive children opt back into pointer events. */
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
+
+#hud.hud-hidden { display: none; }
+
+.hud-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0) 35%, rgba(20, 10, 4, 0.45) 100%);
+}
+
+.hud-title[hidden] { display: none; }
+
+.hud-title-name {
+  font-size: clamp(3rem, 12vw, 8rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+  text-shadow: var(--hud-shadow);
+}
+
+.hud-title-sub {
+  font-size: clamp(0.9rem, 2vw, 1.3rem);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  text-shadow: var(--hud-shadow);
+}
