@@ -136,8 +136,13 @@ export const balance = {
   carCruise:      new Float32Array([11, 12, 13, 11, 10, 12, 9]),
   carSpawnWeight: new Float32Array([3, 4, 1.5, 2, 2, 2.5, 0.6]),
   // physics shared
-  rollingDrag: 0.9,        // per second, linear
-  quadDrag: 0.008,         // per (m/s), quadratic
+  // Retuned T4. The engine fades as accel*(1 - (v/maxSpeed)^2), so at 95% of maxSpeed a car only
+  // has ~10% of its accel left to spend on drag. The original 0.9 / 0.008 cost 37 m/s^2 at 32 m/s
+  // and pinned the CRUISER at 7.8 m/s — below its own carCruise, which validate() forbids as a
+  // pairing and which no traffic car could ever reach. These values leave carMaxSpeed as the real
+  // top speed (every type settles at 96-98% of it) and give a realistic ~0.4 m/s^2 coast-down.
+  rollingDrag: 0.008,      // per second, linear
+  quadDrag: 0.0002,        // per (m/s), quadratic
   slipThreshold: 6,        // lateral speed where grip drops to drift grip
   restitutionWorld: 0.25,
   restitutionCar: 0.3,
