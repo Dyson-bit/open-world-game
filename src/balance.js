@@ -37,7 +37,9 @@ export const balance = {
   maxRenderBoxes: 3200,
   maxWindowBands: 3000,
   maxColliders: 480,
-  maxParkSpots: 800,
+  // raised T2: the §5.1 kerbside spacing (both sides of all 144 road segments, a spot every 7 m
+  // from 12 m past each intersection = 5 per side) yields 1440 spots, which 800 could not hold.
+  maxParkSpots: 1600,
   maxParticles: 4000,
   maxSkids: 1024,
   maxImpacts: 96,
