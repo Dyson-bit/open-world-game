@@ -1,8 +1,9 @@
 // Game: owns balance + gameData, runs the fixed 60 Hz tick, drives the Board, exposes the debug API.
 // There is exactly one requestAnimationFrame chain and it lives here.
-import { balance, validate, BLOCK_TYPE } from './balance.js';
+import { balance, validate, BLOCK_TYPE, CAR_STATE } from './balance.js';
 import { allocateGameData, clearEvents } from './gameData.js';
 import { startGame, tick } from './logic/tick.js';
+import { spawnCar, pickPaint } from './logic/spawn.js';
 import { createRenderer, renderFrame } from './board/renderer.js';
 import { buildCity } from './board/cityMesh.js';
 import { createCars, updateCars } from './board/carMesh.js';
@@ -22,6 +23,7 @@ const autostart = params.get('autostart') === '1';
 const headless = params.get('headless') === '1';
 const nohud = params.get('nohud') === '1';
 const camParam = params.get('cam') || 'none';
+const lineup = params.get('lineup') === '1';
 
 // ---------------------------------------------------------------- data
 const b = balance;
@@ -29,6 +31,14 @@ validate(b);
 const gd = {};
 allocateGameData(gd, b, seed);
 startGame(gd, b);
+// ?lineup=1 — one of every car type in a row on the block north of the plaza, for the Board's
+// car-model shot. Purely a debug view: they are spawned PARKED with no velocity, so nothing in
+// Logic ever touches them again.
+if (lineup) {
+  for (let t = 0; t < b.carTypeCount; t++) {
+    spawnCar(gd, b, t, pickPaint(gd, b, t), -24 + t * 8, 40, 0.6, CAR_STATE.PARKED);
+  }
+}
 
 // ---------------------------------------------------------------- board
 const canvas = document.getElementById('game');
@@ -152,6 +162,8 @@ function applyCamPreset(name) {
   if (!name || name === 'none') return;
   if (name === 'skyline') return setCam(-150, 70, 210, 0, 20, 0);
   if (name === 'street') return setCam(11, 2.2, 30, 0, 3, -40);
+  if (name === 'lineup') return setCam(0, 5, 58, 0, 1, 40);
+  if (name === 'closeup') return setCam(-20, 1.4, 46, -24, 0.8, 40);
   if (name === 'waterfront') return setCam(60, 12, 250, -40, 4, 215);
   if (name === 'plaza') return setCam(45, 25, 45, -10, 15, -10);
   if (name === 'park') {
