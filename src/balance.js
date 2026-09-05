@@ -86,7 +86,11 @@ export const balance = {
   // ---- player ----
   playerSpawnX: 11,          // added T1: where startGame drops the player (plaza-side pavement)
   playerSpawnZ: 11,          // added T1
-  playerSpawnYaw: 0,         // added T1: facing +Z (south)
+  // Retuned T6. Facing +Z put the chase camera 6 m north of the spawn — which is the kerb of the
+  // z=0 road, where a bus is always parked, so the opening frame of the game was the inside of a
+  // bus. Facing north instead puts the camera on the open plaza behind him and the street, the
+  // traffic and the downtown skyline in front.
+  playerSpawnYaw: Math.PI,   // added T1: facing -Z (north), toward the street
   playerRadius: 0.4,
   playerSpeed: 6.5,
   playerAccel: 30,

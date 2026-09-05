@@ -136,6 +136,10 @@ export function allocateGameData(gd, b, seed) {
   gd.camFov = 60;
   gd.camYawOffset = 0; gd.camPitchOffset = 0;
   gd.camShake = 0;
+  // added T6: the forward the chase camera is currently sitting behind. Held (not recomputed) while
+  // the car reverses, so backing up does not whip the camera around to the front; on foot it is the
+  // eased camera forward carried between ticks.
+  gd.camFwdX = 0; gd.camFwdZ = 1;
   gd.camInit = 0;               // 0 until the first update snaps the camera
   gd.camFree = 0;               // 1 = debug free camera (camX.. set externally, logic leaves them alone)
   gd.camMode = 0;               // 0 chase, 1 far chase (camToggle cycles)

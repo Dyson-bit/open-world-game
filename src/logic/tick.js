@@ -39,10 +39,12 @@ export function startGame(gd, b) {
   gd.tick = 0;
   gd.camInit = 0;
 
-  // The camera has never been placed, and camera.js does not run until Task 6. Seed a sensible
-  // chase pose behind the player so the very first rendered frame already shows him from behind.
-  if (gd.camInit === 0) {
+  // The camera has never been placed, and the title card renders whole frames before the first
+  // tick runs. Seed the chase pose behind the player so that very first frame already shows him
+  // from behind; updateCamera then snaps to its own answer on tick 1 (camInit is still 0).
+  {
     const fx = Math.sin(gd.playerYaw), fz = Math.cos(gd.playerYaw);
+    gd.camFwdX = fx; gd.camFwdZ = fz;   // T6: the forward the chase camera sits behind
     gd.camX = gd.playerX - fx * b.camFootDist;
     gd.camY = gd.playerY + b.camFootHeight;
     gd.camZ = gd.playerZ - fz * b.camFootDist;
