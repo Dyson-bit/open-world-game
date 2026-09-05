@@ -66,7 +66,9 @@ export function tick(gd, b) {
   gd.expTickStart = gd.expCount;
   gd.knockTickStart = gd.knockCount;
 
-  // 2..10 — spec §7 order
+  // 2..10 — spec §7 order, plus one T8 step: reactToImpacts, after updateDamage. updateTraffic
+  // runs before resolveCollisions, so [impTickStart, impCount) is still empty where the AI sits
+  // and the "shaken driver" reaction had nowhere to read its impacts from.
   updatePlayer(gd, b);
   updateTraffic(gd, b);
   integrateCars(gd, b);

@@ -1,4 +1,6 @@
-// Traffic AI: lane following, car-ahead braking, intersection yield.
+// Traffic AI: lane following, car-ahead braking, intersection yield, and the "shaken driver"
+// reaction to being hit (reactToImpacts, which tick() calls after updateDamage rather than from
+// updateTraffic — see the comment on it).
 // Logic module: imports only balance and sibling Logic modules, never three, never the DOM,
 // never Math.random. Allocation-free: plain locals and index arithmetic, no objects, no closures.
 //
@@ -20,6 +22,14 @@ import { nearestLanePoint } from './city.js';
 
 const STEER_GAIN = 1.6;      // aim error (rad) -> steer input; full lock at 0.625 rad
 const STRAIGHT_W = 3;        // weight of going straight on at a junction (a turn weighs 1)
+// The lane lines cross 3.5 m from a junction centre and nothing here can steer a 3.5 m radius, so
+// every right-hander is physically an overshoot — and the longer the wheelbase the wider it is
+// (a HAULER needs 6.2 m, a BUS 17.8). Long vehicles therefore go straight on twice as often and
+// take the corners they do turn slower, which is both what real ones do and where most of the
+// remaining junction sideswipes were coming from.
+const LONG_WHEELBASE = 3;    // metres of wheelbase that counts as a long vehicle
+const LONG_STRAIGHT_W = 6;   // ...its weight for going straight on
+const LONG_CORNER_SCALE = 0.7;  // ...and the fraction of aiCornerSpeed it takes a corner at
 const COMMIT = 0.5;          // metres short of the lane end where the car takes the next lane
 const OFF_LANE = 6;          // sideways metres off the lane line before it re-acquires
 const CROSS_SLACK = 20;      // how far short of a lane's start a car may legitimately be (it is
@@ -107,6 +117,15 @@ function holdStopped(gd, b, i, dt) {
 // The lane graph
 // ===========================================================================================
 
+// A long vehicle prefers to stay on the straight and slows more for the corners it does take.
+function straightWeight(b, type) {
+  return b.carWheelbase[type] >= LONG_WHEELBASE ? LONG_STRAIGHT_W : STRAIGHT_W;
+}
+
+function cornerSpeed(b, type) {
+  return b.carWheelbase[type] >= LONG_WHEELBASE ? b.aiCornerSpeed * LONG_CORNER_SCALE : b.aiCornerSpeed;
+}
+
 // Snap car i onto the lane graph and pick its route out of the far end. nearestLanePoint answers
 // with the closest lane whichever way it runs, so a car facing back down it takes the other side
 // of the road instead of driving into the oncoming traffic.
@@ -120,7 +139,7 @@ function acquireLane(gd, b, i, fx, fz) {
   if (t < 0) t = 0; else if (t > len) t = len;
   gd.carLane[i] = l;
   gd.carLaneT[i] = t;
-  gd.carNextLane[i] = chooseNextLane(gd, l);
+  gd.carNextLane[i] = chooseNextLane(gd, l, straightWeight(b, gd.carType[i]));
   return l;
 }
 
@@ -137,8 +156,8 @@ function offLane(gd, lane, x, z) {
 }
 
 // A lane out of laneTo(lane), never the one straight back (no U-turns). Straight on outweighs a
-// turn 3:1. Every draw comes from gd.rand(), so a seed replays exactly.
-function chooseNextLane(gd, lane) {
+// turn straightW:1. Every draw comes from gd.rand(), so a seed replays exactly.
+function chooseNextLane(gd, lane, straightW) {
   const to = gd.laneTo[lane], rev = gd.laneReverse[lane];
   const dx = gd.laneDirX[lane], dz = gd.laneDirZ[lane];
   const s = gd.nodeOutStart[to], n = gd.nodeOutCount[to];
@@ -147,7 +166,7 @@ function chooseNextLane(gd, lane) {
   for (let k = 0; k < n; k++) {
     const l = gd.nodeOutLanes[s + k];
     if (l === rev) continue;
-    total += (gd.laneDirX[l] * dx + gd.laneDirZ[l] * dz > 0.5) ? STRAIGHT_W : 1;
+    total += (gd.laneDirX[l] * dx + gd.laneDirZ[l] * dz > 0.5) ? straightW : 1;
   }
   if (total <= 0) return rev;                       // dead end: back the way we came is all there is
 
@@ -156,7 +175,7 @@ function chooseNextLane(gd, lane) {
     const l = gd.nodeOutLanes[s + k];
     if (l === rev) continue;
     last = l;
-    r -= (gd.laneDirX[l] * dx + gd.laneDirZ[l] * dz > 0.5) ? STRAIGHT_W : 1;
+    r -= (gd.laneDirX[l] * dx + gd.laneDirZ[l] * dz > 0.5) ? straightW : 1;
     if (r <= 0) return l;
   }
   return last;                                      // float slop on the last bucket
@@ -187,9 +206,10 @@ function driveCar(gd, b, i, dt) {
   let len = gd.laneLen[lane];
   let along = (x - gd.laneX0[lane]) * dirX + (z - gd.laneZ0[lane]) * dirZ;
 
+  const straightW = straightWeight(b, T);
   let next = gd.carNextLane[i];
   if (next < 0 || gd.laneFrom[next] !== gd.laneTo[lane]) {
-    next = chooseNextLane(gd, lane);
+    next = chooseNextLane(gd, lane, straightW);
     gd.carNextLane[i] = next;
   }
 
@@ -201,7 +221,7 @@ function driveCar(gd, b, i, dt) {
     dirX = gd.laneDirX[lane]; dirZ = gd.laneDirZ[lane];
     len = gd.laneLen[lane];
     along = (x - gd.laneX0[lane]) * dirX + (z - gd.laneZ0[lane]) * dirZ;
-    next = chooseNextLane(gd, lane);
+    next = chooseNextLane(gd, lane, straightW);
     gd.carNextLane[i] = next;
   }
 
@@ -230,11 +250,12 @@ function driveCar(gd, b, i, dt) {
 
   // ---- speed target: cruise, dropped for the corner we are entering or leaving ----
   let target = b.carCruise[T];
+  const corner = cornerSpeed(b, T);
   if (along < 0) {
-    if (dirX * fx + dirZ * fz < CORNER_ALIGN && target > b.aiCornerSpeed) target = b.aiCornerSpeed;
+    if (dirX * fx + dirZ * fz < CORNER_ALIGN && target > corner) target = corner;
   } else if (next >= 0 && (gd.laneDirX[next] !== dirX || gd.laneDirZ[next] !== dirZ)
-             && len - t < CORNER_LOOK && target > b.aiCornerSpeed) {
-    target = b.aiCornerSpeed;
+             && len - t < CORNER_LOOK && target > corner) {
+    target = corner;
   }
 
   // ---- the car in front ----

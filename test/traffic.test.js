@@ -288,25 +288,30 @@ test('a gentle nudge does not stun', () => {
 
 // -------------------------------------------------------------------- 30 second soak
 
-test('30 s of traffic: stays on the road, stays under cruise, does not pile up', () => {
+// One 30 s run with the player standing in the plaza doing nothing. Returns what the soak is
+// actually about: does the traffic stay on the road, stay under its cruise speed, avoid piling
+// into itself, and keep moving.
+function soak(seed) {
   const gd = {};
-  allocateGameData(gd, b, 7);
+  allocateGameData(gd, b, seed);
   startGame(gd, b);
 
-  // the player stands in the plaza and does nothing
   let plaza = -1;
   for (let k = 0; k < gd.blockCount; k++) if (gd.blockType[k] === BLOCK_TYPE.PLAZA) { plaza = k; break; }
   assert.ok(plaza >= 0, 'the city has a plaza');
   gd.playerX = gd.blockX[plaza];
   gd.playerZ = gd.blockZ[plaza];
 
-  let samples = 0, onRoad = 0, pairHits = 0, overSpeed = 0, worstSpeed = 0;
-  let stoppedSamples = 0, trafficSamples = 0;
   // Two cars in contact are re-reported every tick they stay touching, and a scrape lasts half a
   // second, so raw events count one collision many times. Debounce per pair: one encounter counted
   // once, which is what "does not pile up" is actually asking about.
   const lastHit = new Map();
   const DEBOUNCE = 120;
+
+  const r = {
+    samples: 0, onRoad: 0, pairHits: 0, overSpeed: 0, worstSpeed: 0,
+    stoppedSamples: 0, trafficSamples: 0, worstMoving: 1, worstMovingTick: -1,
+  };
 
   for (let k = 0; k < 1800; k++) {
     tick(gd, b);
@@ -319,31 +324,56 @@ test('30 s of traffic: stays on the road, stays under cruise, does not pile up',
       const prev = lastHit.get(key);
       lastHit.set(key, k);
       if (prev !== undefined && k - prev < DEBOUNCE) continue;
-      pairHits++;
+      r.pairHits++;
     }
     clearEvents(gd);
 
     if (k % 30 !== 0) continue;
+    let live = 0, moving = 0;
     for (let i = 0; i < gd.carCount; i++) {
-      const s = gd.carState[i];
-      if (s === CAR_STATE.STOPPED) stoppedSamples++;
-      if (s !== CAR_STATE.TRAFFIC) continue;
-      trafficSamples++;
-      samples++;
-      if (isOnRoad(b, gd.carX[i], gd.carZ[i])) onRoad++;
+      const st = gd.carState[i];
+      if (st === CAR_STATE.STOPPED) r.stoppedSamples++;
+      if (st !== CAR_STATE.TRAFFIC) continue;
+      live++;
+      r.trafficSamples++;
+      r.samples++;
+      if (isOnRoad(b, gd.carX[i], gd.carZ[i])) r.onRoad++;
       const sp = Math.abs(gd.carSpeedF[i]);
-      if (sp > worstSpeed) worstSpeed = sp;
-      if (sp > b.carCruise[gd.carType[i]] + 1) overSpeed++;
+      if (sp > 1) moving++;
+      if (sp > r.worstSpeed) r.worstSpeed = sp;
+      if (sp > b.carCruise[gd.carType[i]] + 1) r.overSpeed++;
     }
+    // A jam shows up as a tick where most of the traffic is standing still, not as an average.
+    if (live > 0 && moving / live < r.worstMoving) { r.worstMoving = moving / live; r.worstMovingTick = k; }
   }
+  return r;
+}
 
-  assert.ok(samples > 1000, `should have sampled plenty of traffic, got ${samples}`);
-  const frac = onRoad / samples;
-  assert.ok(frac >= 0.95, `traffic on the road ${(frac * 100).toFixed(1)}% of samples`);
-  assert.equal(overSpeed, 0, `no traffic car over cruise + 1 (worst ${worstSpeed.toFixed(2)})`);
-  assert.ok(pairHits <= 3, `traffic-on-traffic collisions ${pairHits} (max 3)`);
-  // and the flow keeps moving: most cars are not sitting shaken
-  assert.ok(stoppedSamples < trafficSamples * 0.25, `too many shaken cars: ${stoppedSamples} vs ${trafficSamples}`);
+// Three seeds, because one city layout passing is not evidence that the AI does not pile up —
+// the collision count is the sensitive number and it varies a lot with where the cars start.
+test('30 s of traffic: stays on the road, stays under cruise, does not pile up or jam', () => {
+  for (const seed of [7, 11, 23]) {
+    const r = soak(seed);
+    const at = ` (seed ${seed})`;
+
+    assert.ok(r.samples > 1000, `should have sampled plenty of traffic, got ${r.samples}${at}`);
+
+    const frac = r.onRoad / r.samples;
+    assert.ok(frac >= 0.95, `traffic on the road ${(frac * 100).toFixed(1)}% of samples${at}`);
+
+    assert.equal(r.overSpeed, 0,
+      `no traffic car over cruise + 1 (worst ${r.worstSpeed.toFixed(2)})${at}`);
+
+    assert.ok(r.pairHits <= 5, `traffic-on-traffic collisions ${r.pairHits} (max 5)${at}`);
+
+    // no persistent jam: at every sampled tick most of the traffic is still rolling
+    assert.ok(r.worstMoving >= 0.6,
+      `only ${(r.worstMoving * 100).toFixed(1)}% of traffic moving at tick ${r.worstMovingTick}${at}`);
+
+    // and the flow keeps moving: most cars are not sitting shaken
+    assert.ok(r.stoppedSamples < r.trafficSamples * 0.25,
+      `too many shaken cars: ${r.stoppedSamples} vs ${r.trafficSamples}${at}`);
+  }
 });
 
 test('30 s of traffic keeps the population spread across the city', () => {
