@@ -178,7 +178,11 @@ export const balance = {
     taillight: 0x7a1414, taillightOn: 0xff3b2e, wreck: 0x2e2a28, skid: 0x2a2a2e,
     skin: 0xf1c27d, shirt: 0xe84a5f, pants: 0x2f4a7a, shoes: 0x2b2b2b, hair: 0x3b2a1e,
   },
-  sun: { elevationDeg: 24, azimuthDeg: 235, intensity: 2.4, hemiIntensity: 1.1, shadowHalf: 110,
+  // T3: sun 2.4 / hemi 1.1 left cast shadows barely darker than lit tarmac — at 24 deg elevation a
+  // horizontal surface only collects 0.41 of the sun, so the sky fill was over half the ground's
+  // light. 3.0 / 1.0 keeps the same golden-hour hues, gives the long shadows real contrast and
+  // still leaves shadowed tarmac readable rather than black.
+  sun: { elevationDeg: 24, azimuthDeg: 235, intensity: 3.0, hemiIntensity: 1.0, shadowHalf: 110,
          shadowMap: 4096, shadowMapHeadless: 2048, fogNear: 220, fogFar: 720 },
 };
 

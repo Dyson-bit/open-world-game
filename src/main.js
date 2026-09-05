@@ -1,6 +1,6 @@
 // Game: owns balance + gameData, runs the fixed 60 Hz tick, drives the Board, exposes the debug API.
 // There is exactly one requestAnimationFrame chain and it lives here.
-import { balance, validate } from './balance.js';
+import { balance, validate, BLOCK_TYPE } from './balance.js';
 import { allocateGameData, clearEvents } from './gameData.js';
 import { startGame, tick } from './logic/tick.js';
 import { createRenderer, renderFrame } from './board/renderer.js';
@@ -60,7 +60,7 @@ showTitle(hud, !started);
 applyCamPreset(camParam);
 
 installDebug({
-  gd, b, ready,
+  gd, b, ready, view,
   setAutoTick, step, render, hideHud, start,
   camPreset: applyCamPreset,
   getFps: function () { return fps; },
@@ -146,8 +146,30 @@ function hideHud(on) {
   if (hudRoot) hudRoot.classList.toggle('hud-hidden', !!on);
 }
 
-// Camera presets reachable from `?cam=<name>` and from tools/shot.mjs. Only `none` exists in Task 1.
+// Camera presets reachable from `?cam=<name>` and from tools/shot.mjs. Each parks the free camera
+// (gd.camFree = 1) so Logic leaves it alone for the rest of the run.
 function applyCamPreset(name) {
   if (!name || name === 'none') return;
+  if (name === 'skyline') return setCam(-150, 70, 210, 0, 20, 0);
+  if (name === 'street') return setCam(11, 2.2, 30, 0, 3, -40);
+  if (name === 'waterfront') return setCam(60, 12, 250, -40, 4, 215);
+  if (name === 'plaza') return setCam(45, 25, 45, -10, 15, -10);
+  if (name === 'park') {
+    let k = -1;
+    for (let i = 0; i < gd.blockCount; i++) {
+      if (gd.blockType[i] === BLOCK_TYPE.PARK) { k = i; break; }
+    }
+    if (k < 0) { console.warn('joyride: cam preset "park" — no park block'); return; }
+    const d = 40 * Math.SQRT1_2;      // 40 m away, to the south-east
+    return setCam(gd.blockX[k] + d, 18, gd.blockZ[k] + d, gd.blockX[k], 2, gd.blockZ[k]);
+  }
   console.warn('joyride: unknown cam preset "' + name + '"');
+}
+
+function setCam(x, y, z, lx, ly, lz) {
+  gd.camFree = 1;
+  gd.camX = x; gd.camY = y; gd.camZ = z;
+  gd.camLookX = lx; gd.camLookY = ly; gd.camLookZ = lz;
+  gd.camFov = b.camFovMin;
+  gd.camShake = 0;
 }

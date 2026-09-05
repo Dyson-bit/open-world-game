@@ -7,7 +7,7 @@ import {
   DirectionalLight, HemisphereLight,
   PlaneGeometry, SphereGeometry, IcosahedronGeometry,
   MeshLambertMaterial, ShaderMaterial, BackSide,
-  SRGBColorSpace, NoToneMapping, PCFSoftShadowMap,
+  SRGBColorSpace, NoToneMapping, PCFShadowMap,
 } from 'three';
 import { PLAYER_MODE } from '../balance.js';
 import { mulberry32 } from '../rng.js';
@@ -32,7 +32,14 @@ uniform vec3 sunDir;
 varying vec3 vDir;
 void main() {
   vec3 dir = normalize(vDir);
-  vec3 col = mix(horizon, zenith, pow(max(dir.y, 0.0), 0.55));
+  // The horizon band has to stay narrow: a camera looking at the skyline only reaches dir.y ~= 0.35
+  // at the top of the frame, so an exponent curve leaves the whole sky washed out peach. smoothstep
+  // keeps the golden band in the bottom 10 degrees and is fully at the zenith colour by 25 deg.
+  // The blend runs in an approximate gamma space (sqrt / square) — mixing a bright warm horizon
+  // with a saturated blue in linear space desaturates everything in between.
+  float t = smoothstep(0.02, 0.42, dir.y);
+  vec3 col = mix(sqrt(horizon), sqrt(zenith), t);
+  col *= col;
   col += vec3(1.0, 0.75, 0.45) * pow(max(dot(dir, sunDir), 0.0), 24.0) * 0.55;
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -48,7 +55,8 @@ export function createRenderer(canvas, gd, b, opts) {
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NoToneMapping;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  // PCFSoftShadowMap is deprecated in r185 (it warns and silently falls back to this anyway).
+  renderer.shadowMap.type = PCFShadowMap;
 
   const scene = new Scene();
   scene.background = new Color(b.colors.skyHorizon);
@@ -71,8 +79,11 @@ export function createRenderer(canvas, gd, b, opts) {
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 600;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.4;
+  // One shadow texel is 0.054 m at 4096 / 0.107 m headless, so a normal bias of a couple of texels
+  // is enough to kill acne; the 0.4 this started at was wide enough to eat the self-shading of a
+  // tree canopy and to detach small props from their own shadows.
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.15;
   sun.position.set(SUN_NX * SUN_DIST, SUN_NY * SUN_DIST, SUN_NZ * SUN_DIST);
   const sunTarget = new Object3D();
   scene.add(sunTarget);
@@ -137,16 +148,19 @@ export function createRenderer(canvas, gd, b, opts) {
 
   const shore = new Mesh(new PlaneGeometry(1600, 6), new MeshLambertMaterial({ color: b.colors.waterDeep }));
   shore.rotation.x = -Math.PI / 2;
-  shore.position.set(0, -0.35, b.waterZ + 3);
+  // above the water's wave crest (-0.4 + 0.08) or the shoreline band vanishes for half of every cycle
+  shore.position.set(0, -0.28, b.waterZ + 3);
   scene.add(shore);
 
   // ---- clouds -------------------------------------------------------------
   const cloudGeo = new SphereGeometry(1, 7, 5);
-  // A touch of self-illumination in the cloud's own colour: the hemisphere ground light is a warm
-  // tan, which otherwise turns every underside muddy brown and the puffs read as rocks.
+  // Clouds are lit almost entirely by their own emissive: a Lambert puff under a low sun is dark
+  // on every face that is not pointing west, and with the hemisphere ground tint it reads as a
+  // grey rock rather than as cloud. Emissive at 0.85 of the cloud colour floors the whole puff at
+  // bright cream and leaves the sun and sky to add the last of the modelling on top.
   const cloudMat = new MeshLambertMaterial({
     color: b.colors.cloud, flatShading: true, fog: true,
-    emissive: b.colors.cloud, emissiveIntensity: 0.5,
+    emissive: b.colors.cloud, emissiveIntensity: 0.85,
   });
   const clouds = new Group();
   for (let i = 0; i < 10; i++) {
@@ -211,9 +225,13 @@ export function renderFrame(view, gd, b, dtFrame) {
   // the sky dome rides with the camera so it never clips
   view.sky.position.set(cx, cy, cz);
 
-  // shadow focus follows whatever the player is: snapped to a shadow texel so shadows don't swim
+  // shadow focus follows whatever the player is: snapped to a shadow texel so shadows don't swim.
+  // With the free camera (debug / cam presets / title card) the player may be a city away from what
+  // is on screen, so the focus goes to what the camera is looking at instead.
   let fx, fz;
-  if (gd.playerMode === PLAYER_MODE.IN_CAR && gd.playerCar >= 0) {
+  if (gd.camFree === 1) {
+    fx = lx; fz = lz;
+  } else if (gd.playerMode === PLAYER_MODE.IN_CAR && gd.playerCar >= 0) {
     fx = gd.carX[gd.playerCar]; fz = gd.carZ[gd.playerCar];
   } else {
     fx = gd.playerX; fz = gd.playerZ;
