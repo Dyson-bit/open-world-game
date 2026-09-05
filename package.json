@@ -1,0 +1,22 @@
+{
+  "name": "joyride",
+  "version": "0.1.0",
+  "description": "Open-world driving sandbox: steal, drive, wreck, repeat.",
+  "scripts": {
+    "start": "node tools/serve.js",
+    "test": "node --test test/ && node tools/capture.mjs --assert",
+    "unit": "node --test test/",
+    "capture": "node tools/capture.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.10.0"
+  },
+  "private": true
+}
