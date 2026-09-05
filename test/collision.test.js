@@ -2,7 +2,8 @@
 // world is AABB colliders + circle props, and every meaningful hit becomes an impact event.
 //
 // The tests below drive the same three calls tick.js makes, in the same order:
-//   integrateCars -> updateCarBounds -> resolveCollisions -> updateProps
+//   integrateCars -> resolveCollisions -> updateProps
+// resolveCollisions refreshes the car bounds itself, so tick.js does not call updateCarBounds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { balance, CAR_STATE, PROP_STATE, PROP_TYPE, IMPACT_KIND, SIDE } from '../src/balance.js';
@@ -61,7 +62,6 @@ function steps(gd, n, clear) {
     gd.impTickStart = gd.impCount;
     gd.knockTickStart = gd.knockCount;
     integrateCars(gd, b);
-    updateCarBounds(gd, b);
     resolveCollisions(gd, b);
     updateProps(gd, b);
     if (clear) clearEvents(gd);
@@ -233,8 +233,7 @@ test('(c4) two exactly coincident cars separate without producing a NaN', () => 
   const gd = empty();
   const i = spawnCar(gd, b, CRUISER, 0x333333, 5, 5, 0, CAR_STATE.PLAYER);
   const j = spawnCar(gd, b, CRUISER, 0x444444, 5, 5, 0, CAR_STATE.PLAYER);
-  updateCarBounds(gd, b);
-  resolveCollisions(gd, b);
+  resolveCollisions(gd, b);      // no updateCarBounds: resolveCollisions must be self-sufficient
   for (const a of [i, j]) {
     assert.ok(Number.isFinite(gd.carX[a]) && Number.isFinite(gd.carZ[a]), 'position went NaN');
     assert.ok(Number.isFinite(gd.carVX[a]) && Number.isFinite(gd.carVZ[a]), 'velocity went NaN');

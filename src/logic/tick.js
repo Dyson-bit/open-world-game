@@ -7,7 +7,7 @@ import { placeParkedCars, placeTraffic, manageTraffic } from './spawn.js';
 import { updatePlayer } from './player.js';
 import { updateTraffic } from './traffic.js';
 import { integrateCars } from './vehicle.js';
-import { updateCarBounds, resolveCollisions } from './collision.js';
+import { resolveCollisions } from './collision.js';
 import { updateProps } from './props.js';
 import { updateDamage } from './damage.js';
 import { updateParticles } from './particles.js';
@@ -70,7 +70,8 @@ export function tick(gd, b) {
   updatePlayer(gd, b);
   updateTraffic(gd, b);
   integrateCars(gd, b);
-  updateCarBounds(gd, b);
+  // §7 step 5. resolveCollisions refreshes the car OBB corners and AABBs itself, first thing —
+  // calling updateCarBounds here as well would do every car's trig twice for nothing.
   resolveCollisions(gd, b);
   updateProps(gd, b);
   updateDamage(gd, b);
