@@ -338,7 +338,8 @@ async function runScenarios(page, args, report) {
     again.fallback = `walking did not reach a car in 1200 ticks, so the player was teleported next to car ${target} at (${tpos[0].toFixed(1)}, ${tpos[1].toFixed(1)})`;
   }
   pk = await peek();
-  check(again, 'a second car is within reach', s.nearestCar >= 0, `nearestCar=${s.nearestCar} at ${pk.nearestDist} m after ${walkTicks} ticks of walking`);
+  check(again, 'a second car is within reach', s.nearestCar >= 0,
+    `nearestCar=${s.nearestCar} at ${pk.nearestDist} m after ${walkTicks} ticks of walking towards car ${target} — whichever car comes within reach first is the one he takes, so a passing traffic car counts`);
   const secondCar = await ev(() => window.__game.enterNearestCar());
   await step(5);
   s = await st();
@@ -386,13 +387,18 @@ async function runScenarios(page, args, report) {
       if (score > bestN) { bestN = score; best = i; bestCount = n; }
     }
     if (best < 0) return null;
+    // Down the road the traffic is on, not across the block: a corner view from 20 m up is as
+    // likely to be looking at the roof of an office as at the cars. A road is an open corridor,
+    // so the camera sits behind the car along its own heading, like a helicopter over the street.
     const gx = gd.carX[best], gz = gd.carZ[best];
-    window.__game.setFreeCamera(gx + 21, 34, gz + 21, gx, 0.5, gz);
+    const yaw = gd.carYaw[best];
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    window.__game.setFreeCamera(gx - fx * 26, 13, gz - fz * 26, gx + fx * 14, 0.5, gz + fz * 14);
     window.__game.render();
     return { car: best, neighbours: bestCount, x: Math.round(gx), z: Math.round(gz) };
   }, CAR_STATE.TRAFFIC);
   traffic.note = busiest
-    ? `framed over the busiest patch of traffic — car ${busiest.car} at (${busiest.x}, ${busiest.z}) with ${busiest.neighbours} other traffic cars inside 60 m; the "street" preset is a fixed kerbside camera and the traffic is rarely in front of it`
+    ? `framed down the road the traffic is on, behind car ${busiest.car} at (${busiest.x}, ${busiest.z}) — the busiest patch, with ${busiest.neighbours} other traffic cars inside 60 m; the "street" preset is a fixed kerbside camera and the traffic is rarely in front of it`
     : 'no traffic car found to frame; the shot is the "street" preset';
   await shot(traffic, 'traffic');
   await ev(() => window.__game.clearFreeCamera());
