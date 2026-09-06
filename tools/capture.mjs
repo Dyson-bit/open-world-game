@@ -91,9 +91,13 @@ function check(sc, name, ok, detail) {
 //               natural angle is the game's own chase camera, which must not be disturbed
 //
 // A candidate scores the tightest of: how far every standing prop is from the camera->subject
-// sight line (want 1.5 m), how far the camera is from the nearest building face (want 4 m), and
-// how far the sight line itself stays from a building on its way in (want 1 m, ignoring the last
-// 3 m, where the subject may legitimately be parked against a wall). The score is normalised, so
+// sight line (want 1.5 m), how far every OTHER live car's box is from that same sight line (want
+// 1.5 m too — the 12 m bus a scenario just rear-ended is as much in the way as a lamp post, and it
+// is the reason the crash frame used to be half red bus), how far the camera is from the nearest
+// building face (want 4 m), and how far the sight line itself stays from a building on its way in
+// (want 1 m, ignoring the last 3 m, where the subject may legitimately be parked against a wall
+// — cars get no such grace, because a vehicle touching the subject is exactly what has to be
+// photographed around). The score is normalised, so
 // 1 means "clears everything". A second, softer rule breaks ties between clear candidates: the
 // backdrop, how far the sight line runs on past the subject before it meets a building, because a
 // frame whose whole background is a wall two metres behind the car is a poor photograph of it.
@@ -104,6 +108,7 @@ function installStaging() {
   const CLEAR_LOS = 1;        // ...between the sight line and a building it passes
   const CLEAR_BACK = 25;      // ...and behind the subject, before the frame becomes a blank wall
   const SUBJECT_SKIP = 3;     // the last few metres before the subject are the subject's business
+  const SUBJECT_BOX = 0.6;    // slack when deciding which car box the aim point is standing in
   const SAMPLES = 24;
 
   window.__stage = function (sx, sz, camY, dist, heading, offs, lx, ly, lz, onlyIfMoved) {
@@ -158,6 +163,29 @@ function installStaging() {
       }
       return best;
     }
+    // Which car slots count as obstacles: everything live except the subject itself. The subject
+    // is whichever car the aim point sits inside (the player's, normally; the wreck triptych's
+    // subject is a WRECK and playerCar is -1 by then, so the box test is the one that must decide).
+    // A wreck anybody else left in the road is a real 4 m object and stays in.
+    const obstacle = new Uint8Array(gd.carCount);
+    for (let i = 0; i < gd.carCount; i++) {
+      const own = i === gd.playerCar
+        || (sx > gd.carMinX[i] - SUBJECT_BOX && sx < gd.carMaxX[i] + SUBJECT_BOX
+          && sz > gd.carMinZ[i] - SUBJECT_BOX && sz < gd.carMaxZ[i] + SUBJECT_BOX);
+      obstacle[i] = own ? 0 : 1;
+    }
+    function carDist(px, pz) {
+      let best = 1e9;
+      for (let i = 0; i < gd.carCount; i++) {
+        if (!obstacle[i]) continue;
+        const qx = px < gd.carMinX[i] ? gd.carMinX[i] : (px > gd.carMaxX[i] ? gd.carMaxX[i] : px);
+        const qz = pz < gd.carMinZ[i] ? gd.carMinZ[i] : (pz > gd.carMaxZ[i] ? gd.carMaxZ[i] : pz);
+        const dx = px - qx, dz = pz - qz;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        if (d < best) best = d;
+      }
+      return best;
+    }
     function score(cx, cz) {
       let s = boxDist(cx, cz) / CLEAR_CAM;
       for (let p = 0; p < gd.propCount; p++) {
@@ -168,8 +196,11 @@ function installStaging() {
       const len = Math.sqrt((sx - cx) * (sx - cx) + (sz - cz) * (sz - cz));
       const keep = len > SUBJECT_SKIP ? 1 - SUBJECT_SKIP / len : 0;
       for (let k = 0; k <= SAMPLES; k++) {
-        const t = keep * k / SAMPLES;
-        const d = boxDist(cx + (sx - cx) * t, cz + (sz - cz) * t) / CLEAR_LOS;
+        const t = k / SAMPLES;
+        const bx = cx + (sx - cx) * t * keep, bz = cz + (sz - cz) * t * keep;
+        let d = boxDist(bx, bz) / CLEAR_LOS;
+        if (d < s) s = d;
+        d = carDist(cx + (sx - cx) * t, cz + (sz - cz) * t) / CLEAR_PROP;
         if (d < s) s = d;
       }
       return s;
@@ -210,8 +241,12 @@ function installStaging() {
 
 const DEG = Math.PI / 180;
 // The candidate list a staged car shot tries: its own offset, the mirror of it about the car's
-// heading, then 20 deg either side of each.
-function offsets(o) { return [o, -o, o + 20 * DEG, o - 20 * DEG, -o + 20 * DEG, -o - 20 * DEG]; }
+// heading, 20 deg either side of each, and finally the two front quarters — a car that has been
+// rear-ended is nose-to-tail with something 12 m long, and the only vantage that shows the damage
+// without the other vehicle across the frame is from the side.
+function offsets(o) {
+  return [o, -o, o + 20 * DEG, o - 20 * DEG, -o + 20 * DEG, -o - 20 * DEG, 55 * DEG, -55 * DEG];
+}
 // What a scenario says about its framing when __stage had to move off the natural angle.
 function stageNote(r, what) {
   const moved = r.first < 1
@@ -396,16 +431,15 @@ async function runScenarios(page, args, report) {
   // The chase camera sits directly behind a 12 m bus, which hides the entire crash: the car it
   // rear-ended, the crumpled nose and the sparks are all on the far side of the roof. Three-quarter
   // view from the driver's side, level with the impact, while the particles are still alive —
-  // 10 m out at 50.7 deg off the nose — the old (left 11, front 9) offset in polar form, pulled in
-  // from 14.2 m and aimed at the car's own nose rather than 4.5 m past it, because the thing the
-  // scenario asserts is the crumpled bodywork and at 14 m behind a 12 m bus it was 80 px of green.
-  // __stage takes it to the passenger side, or 20 deg round, if a pole or a wall is in the way.
+  // 8.5 m out at 50.7 deg off the nose — the old (left 11, front 9) offset in polar form, pulled in
+  // from 14.2 m and aimed at the player's car itself rather than 4.5 m past it, because the thing
+  // the scenario asserts is the crumpled bodywork and at 14 m behind a 12 m bus it was 80 px of
+  // green. __stage does the rest: the bus counts as an obstacle, so it swings the lens round to
+  // the side of the Cruiser where the damage is instead of shooting down the bus's flank.
   const crashCam = await ev((o) => {
     const gd = window.__game.gd, c = gd.playerCar;
-    const yaw = gd.carYaw[c];
-    const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    return window.__stage(gd.carX[c], gd.carZ[c], 3.2, 10, yaw, o,
-      gd.carX[c] + fx * 2.2, 1.1, gd.carZ[c] + fz * 2.2);
+    return window.__stage(gd.carX[c], gd.carZ[c], 2.8, 8.5, gd.carYaw[c], o,
+      gd.carX[c], 1.0, gd.carZ[c]);
   }, offsets(Math.atan2(11, 9)));
   crash.note = stageNote(crashCam, 'the crash frame is a three-quarter view from the driver\'s side (setFreeCamera) — the chase camera is behind a 12 m bus and the whole impact happens on the far side of it');
   await shot(crash, 'crash');
