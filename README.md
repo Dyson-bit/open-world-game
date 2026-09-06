@@ -71,9 +71,13 @@ report and prints the summary table.
 The scenarios: `arrival`, `steal`, `drive`, `crash`, `wreck` (burning → explosion → wreck),
 `steal-again`, `traffic`, `postcard-skyline/plaza/park/waterfront/street`, `perf`.
 
-Everything is driven through `window.__game` in fixed steps, never wall-clock waits, so two runs
-with the same seed produce the same states and the same pixels — the exception is `perf`, which
-deliberately runs on real time.
+Everything is driven through `window.__game` in fixed steps, never wall-clock waits, so two runs of
+the same seed produce identical states — every check detail and every `state` snapshot in the report
+matches. `perf` is the one scenario that deliberately runs on real time, and its `fps`, `frames` and
+tick count move with the machine. The pixels are all but identical rather than identical: the page's
+own `requestAnimationFrame` loop keeps rendering between steps, so visual easing that rides on real
+frame time (HUD animations, mesh smoothing) lands a couple of hundred pixels out of 921,600
+differently from run to run.
 
 ### What `captures/report.json` contains
 

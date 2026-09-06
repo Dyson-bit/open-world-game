@@ -19,8 +19,12 @@
 // without it the harness still writes the report and prints the table.
 //
 // Everything is driven through window.__game (src/debug.js) with the fixed-step step(n), never
-// through wall-clock waits, so two runs produce the same states and the same pixels. The one
-// exception is the last scenario, `perf`, which deliberately runs on real time.
+// through wall-clock waits, so two runs of the same seed produce identical states: every check
+// detail and every state snapshot in the report matches, and the last scenario, `perf`, is the one
+// that deliberately runs on real time. The pixels are all but identical rather than identical —
+// the page's own requestAnimationFrame loop keeps rendering between our steps, and the purely
+// visual easing that rides on real frame time (HUD animations, mesh smoothing) lands a couple of
+// hundred pixels out of 921,600 differently from one run to the next.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -455,6 +459,7 @@ async function runScenarios(page, args, report) {
     };
     requestAnimationFrame(f);
   });
+  const beforeTick = (await st()).tick;
   await ev(() => window.__game.setAutoTick(true));
   const t0 = Date.now();
   await new Promise((r) => setTimeout(r, 3000));
@@ -470,7 +475,8 @@ async function runScenarios(page, args, report) {
   perf.autoTickSeconds = Math.round(wallS * 100) / 100;
   check(perf, 'draw calls are inside the budget', s.drawCalls > 0 && s.drawCalls < 400, `drawCalls=${s.drawCalls} (< 400)`);
   check(perf, 'no frame hung', frames.max < 2000, `slowest of ${frames.n} frames was ${frames.max} ms (< 2000)`);
-  check(perf, 'the world kept ticking', s.tick > live.tick - 1, `tick=${s.tick} after ${perf.autoTickSeconds}s of autoTick (${frames.n} frames)`);
+  check(perf, 'the loop ran itself', frames.n > 5 && live.tick > beforeTick,
+    `${frames.n} frames and ${live.tick - beforeTick} ticks in ${perf.autoTickSeconds}s of autoTick (tick ${beforeTick} -> ${live.tick})`);
   perf.checks.push({ name: 'fps (information only — SwiftShader)', ok: true, detail: `${live.fps.toFixed(1)} fps over ${frames.n} frames of software rendering` });
   await shot(perf, 'perf');
   perf.state = s;
