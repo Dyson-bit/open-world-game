@@ -88,8 +88,13 @@ function explode(gd, b, c) {
   }
 
   // Count it before the player is thrown clear — the fling clears playerCar, and the rule is
-  // "what the player wrecked", i.e. he stole it, was in it, or had been in it.
-  if (gd.carPrevState[c] === CAR_STATE.PLAYER || c === gd.playerCar || c === gd.playerLastCar) {
+  // "what the player wrecked", i.e. he was in it when it died or is in it now. playerLastCar is
+  // deliberately NOT part of the test: it names the last car he ever got out of and is never
+  // cleared, so a car he abandoned intact and walked away from would still be scored to him if
+  // something else blew it up an hour later. carPrevState[c] === PLAYER already covers the case
+  // that clause was there for — the state is stamped when health hits 0 while he is inside, so a
+  // car he bails out of while it burns still counts.
+  if (gd.carPrevState[c] === CAR_STATE.PLAYER || c === gd.playerCar) {
     gd.statWrecked++;
   }
 

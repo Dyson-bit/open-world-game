@@ -203,6 +203,9 @@ export const balance = {
 export function validate(b) {
   const errs = [];
   if (b.blocksX * b.cell !== b.cityHalf * 2) errs.push('cityHalf must equal blocksX*cell/2');
+  // city.js buildCones walks blocksX+1 on BOTH axes, so a non-square grid would silently lose or
+  // duplicate a row of intersections rather than fail a length check.
+  if (b.blocksX !== b.blocksZ) errs.push('city generation assumes a square grid');
   if ((b.blocksX + 1) * (b.blocksZ + 1) !== b.nodeCount) errs.push('nodeCount mismatch');
   if (2 * ((b.blocksX + 1) * b.blocksZ + (b.blocksZ + 1) * b.blocksX) !== b.laneCount) errs.push('laneCount mismatch');
   if (b.blocksX * b.blocksZ !== b.blockCount) errs.push('blockCount mismatch');

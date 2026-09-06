@@ -239,6 +239,65 @@ test('a car that becomes a WRECK is charred and crumpled once', () => {
   assert.deepEqual(col, colAfter);
 });
 
+test('a hurt car soots on the health tiers, once each, and a rebuild gives it clean paint', () => {
+  const gd = bare();
+  const v = view();
+  spawnCar(gd, b, 1, 0x2f8f4e, 0, 0, 0, CAR_STATE.PARKED);
+  const cars = createCars(v, gd, b);
+  updateCars(cars, v, gd, b, 1 / 60);
+  gd.carDirty.fill(0);
+
+  const geo = cars.meshes[0].geometry;
+  const col = geo.attributes.color.array;
+  const pos = geo.attributes.position.array;
+  const healthy = Float32Array.from(col);
+  const posBefore = Float32Array.from(pos);
+  assert.equal(cars.lastTier[0], 0);
+
+  // smoking: darker, but a long way from a wreck, and no vertex has moved
+  gd.carHealth[0] = (b.smokeHealth + b.fireHealth) * 0.5;
+  updateCars(cars, v, gd, b, 1 / 60);
+  assert.equal(cars.lastTier[0], 1);
+  const smoking = Float32Array.from(col);
+  let darker = 0;
+  for (let k = 0; k < col.length; k++) if (col[k] < healthy[k] - 1e-6) darker++;
+  assert.ok(darker > col.length * 0.8, `only ${darker}/${col.length} channels sooted at tier 1`);
+  assert.deepEqual(pos, posBefore, 'soot is colour only');
+
+  // holding the same tier must not soot again
+  updateCars(cars, v, gd, b, 1 / 60);
+  assert.deepEqual(col, smoking, 'soot is applied on the tier change, not every frame');
+
+  // on fire: darker again
+  gd.carHealth[0] = b.fireHealth * 0.3;
+  updateCars(cars, v, gd, b, 1 / 60);
+  assert.equal(cars.lastTier[0], 2);
+  let darker2 = 0;
+  for (let k = 0; k < col.length; k++) if (col[k] < smoking[k] - 1e-6) darker2++;
+  assert.ok(darker2 > col.length * 0.8, `only ${darker2}/${col.length} channels sooted at tier 2`);
+
+  // a slot recycled into a new car is clean again
+  gd.carDirty[0] = 1;
+  gd.carHealth[0] = 100;
+  updateCars(cars, v, gd, b, 1 / 60);
+  assert.equal(cars.lastTier[0], 0);
+  assert.deepEqual(cars.meshes[0].geometry.attributes.color.array, healthy);
+});
+
+test('a car that goes straight from healthy to on fire soots the same amount as one that got there in two steps', () => {
+  function paintAt(steps) {
+    const gd = bare();
+    const v = view();
+    spawnCar(gd, b, 1, 0x2f8f4e, 0, 0, 0, CAR_STATE.PARKED);
+    const cars = createCars(v, gd, b);
+    updateCars(cars, v, gd, b, 1 / 60);
+    gd.carDirty.fill(0);
+    for (const h of steps) { gd.carHealth[0] = h; updateCars(cars, v, gd, b, 1 / 60); }
+    return Float32Array.from(cars.meshes[0].geometry.attributes.color.array);
+  }
+  assert.deepEqual(paintAt([b.fireHealth * 0.3]), paintAt([b.smokeHealth - 1, b.fireHealth * 0.3]));
+});
+
 test('geometry is rebuilt only for the slots carDirty flags', () => {
   const gd = bare();
   const v = view();

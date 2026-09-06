@@ -71,6 +71,157 @@ function check(sc, name, ok, detail) {
   return !!ok;
 }
 
+// ---------------------------------------------------------------- staged-camera framing
+// A lamp post is 6 m tall, 0.25 m thick and there is one every few metres of kerb, so a staged
+// camera that hard-codes one offset angle puts a pole through the middle of a frame sooner or
+// later — three of the fifteen shots had one. Every staged camera now asks for its vantage through
+// window.__stage, which scores the candidate angles and takes the one with the clearest sight line.
+//
+// Installed into the page once (it is stringified by page.evaluate, so it references nothing
+// outside itself). Angles follow the game's convention: yaw t points at (sin t, cos t).
+//
+//   __stage(sx, sz, camY, dist, heading, offs, lx, ly, lz, onlyIfMoved)
+//
+//   (sx,sz)     the subject on the ground
+//   camY, dist  how high and how far back the camera sits
+//   heading     the subject's own yaw; `offs` are angles off it, FROM the subject TO the camera
+//   offs[0]     the shot's natural framing — it wins whenever it is clear enough
+//   (lx,ly,lz)  the aim point, which is the same whichever candidate is chosen
+//   onlyIfMoved when true, a win for offs[0] leaves the camera completely alone — for a shot whose
+//               natural angle is the game's own chase camera, which must not be disturbed
+//
+// A candidate scores the tightest of: how far every standing prop is from the camera->subject
+// sight line (want 1.5 m), how far the camera is from the nearest building face (want 4 m), and
+// how far the sight line itself stays from a building on its way in (want 1 m, ignoring the last
+// 3 m, where the subject may legitimately be parked against a wall). The score is normalised, so
+// 1 means "clears everything". A second, softer rule breaks ties between clear candidates: the
+// backdrop, how far the sight line runs on past the subject before it meets a building, because a
+// frame whose whole background is a wall two metres behind the car is a poor photograph of it.
+// Returns { i, deg, score, first, back } for the scenario's `note`.
+function installStaging() {
+  const CLEAR_PROP = 1.5;     // metres of daylight wanted between a pole and the sight line
+  const CLEAR_CAM = 4;        // ...between the lens and a building face
+  const CLEAR_LOS = 1;        // ...between the sight line and a building it passes
+  const CLEAR_BACK = 25;      // ...and behind the subject, before the frame becomes a blank wall
+  const SUBJECT_SKIP = 3;     // the last few metres before the subject are the subject's business
+  const SAMPLES = 24;
+
+  window.__stage = function (sx, sz, camY, dist, heading, offs, lx, ly, lz, onlyIfMoved) {
+    const gd = window.__game.gd;
+
+    function segDist(ax, az, bx, bz, px, pz) {
+      const vx = bx - ax, vz = bz - az;
+      const vv = vx * vx + vz * vz;
+      let t = vv > 1e-9 ? ((px - ax) * vx + (pz - az) * vz) / vv : 0;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      const dx = px - (ax + vx * t), dz = pz - (az + vz * t);
+      return Math.sqrt(dx * dx + dz * dz);
+    }
+    function boxDist(px, pz) {
+      let best = 1e9;
+      for (let i = 0; i < gd.colCount; i++) {
+        const qx = px < gd.colMinX[i] ? gd.colMinX[i] : (px > gd.colMaxX[i] ? gd.colMaxX[i] : px);
+        const qz = pz < gd.colMinZ[i] ? gd.colMinZ[i] : (pz > gd.colMaxZ[i] ? gd.colMaxZ[i] : pz);
+        const dx = px - qx, dz = pz - qz;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        if (d < best) best = d;
+      }
+      return best;
+    }
+    // How far the sight line runs on past the subject before it hits a building: the depth of the
+    // frame behind the thing being photographed.
+    function backdrop(cx, cz) {
+      let ux = sx - cx, uz = sz - cz;
+      const l = Math.sqrt(ux * ux + uz * uz);
+      if (l < 1e-6) return 1e9;
+      ux /= l; uz /= l;
+      let best = 1e9;
+      for (let i = 0; i < gd.colCount; i++) {
+        let lo = 0, hi = 1e9;
+        if (Math.abs(ux) < 1e-9) {
+          if (sx < gd.colMinX[i] || sx > gd.colMaxX[i]) continue;
+        } else {
+          let t1 = (gd.colMinX[i] - sx) / ux, t2 = (gd.colMaxX[i] - sx) / ux;
+          if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+          if (t1 > lo) lo = t1;
+          if (t2 < hi) hi = t2;
+        }
+        if (Math.abs(uz) < 1e-9) {
+          if (sz < gd.colMinZ[i] || sz > gd.colMaxZ[i]) continue;
+        } else {
+          let t1 = (gd.colMinZ[i] - sz) / uz, t2 = (gd.colMaxZ[i] - sz) / uz;
+          if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+          if (t1 > lo) lo = t1;
+          if (t2 < hi) hi = t2;
+        }
+        if (hi >= lo && lo < best) best = lo;
+      }
+      return best;
+    }
+    function score(cx, cz) {
+      let s = boxDist(cx, cz) / CLEAR_CAM;
+      for (let p = 0; p < gd.propCount; p++) {
+        if (gd.propState[p] !== 0) continue;          // knocked over: not in the way any more
+        const d = segDist(cx, cz, sx, sz, gd.propX[p], gd.propZ[p]) / CLEAR_PROP;
+        if (d < s) s = d;
+      }
+      const len = Math.sqrt((sx - cx) * (sx - cx) + (sz - cz) * (sz - cz));
+      const keep = len > SUBJECT_SKIP ? 1 - SUBJECT_SKIP / len : 0;
+      for (let k = 0; k <= SAMPLES; k++) {
+        const t = keep * k / SAMPLES;
+        const d = boxDist(cx + (sx - cx) * t, cz + (sz - cz) * t) / CLEAR_LOS;
+        if (d < s) s = d;
+      }
+      return s;
+    }
+
+    const scores = [], backs = [];
+    for (let k = 0; k < offs.length; k++) {
+      const a = heading + offs[k];
+      const cx = sx + Math.sin(a) * dist, cz = sz + Math.cos(a) * dist;
+      scores.push(score(cx, cz));
+      backs.push(backdrop(cx, cz));
+    }
+    let bi = 0;
+    if (scores[0] < 1) {
+      // something is in the way of the natural angle: take the roomiest candidate
+      for (let k = 1; k < scores.length; k++) if (scores[k] > scores[bi]) bi = k;
+    } else if (backs[0] < CLEAR_BACK) {
+      // the sight line is clear but the frame is a wall just behind the subject: among the
+      // candidates that are also clear, take the one with the most depth behind it
+      for (let k = 1; k < scores.length; k++) if (scores[k] >= 1 && backs[k] > backs[bi]) bi = k;
+    }
+    const a = heading + offs[bi];
+    if (bi !== 0 || !onlyIfMoved) {
+      window.__game.setFreeCamera(sx + Math.sin(a) * dist, camY, sz + Math.cos(a) * dist, lx, ly, lz);
+      window.__game.render();
+    }
+    const r2 = (v) => Math.round(v * 100) / 100;
+    return {
+      i: bi,
+      deg: Math.round((offs[bi] - offs[0]) * 180 / Math.PI),
+      score: r2(scores[bi]),
+      first: r2(scores[0]),
+      back: Math.round(Math.min(backs[bi], 999)),
+      backFirst: Math.round(Math.min(backs[0], 999)),
+    };
+  };
+}
+
+const DEG = Math.PI / 180;
+// The candidate list a staged car shot tries: its own offset, the mirror of it about the car's
+// heading, then 20 deg either side of each.
+function offsets(o) { return [o, -o, o + 20 * DEG, o - 20 * DEG, -o + 20 * DEG, -o - 20 * DEG]; }
+// What a scenario says about its framing when __stage had to move off the natural angle.
+function stageNote(r, what) {
+  const moved = r.first < 1
+    ? `the natural angle scored ${r.first} for clearance (a prop or a wall inside the sight line)`
+    : `the natural angle was clear but had only ${r.backFirst} m of backdrop behind the subject`;
+  return r.i === 0
+    ? `${what}; the sight line was clear (clearance ${r.score}, backdrop ${r.back} m), so the shot is the natural angle`
+    : `${what}; ${moved}, so the camera took the ${r.deg > 0 ? '+' : ''}${r.deg} deg variant (clearance ${r.score}, backdrop ${r.back} m)`;
+}
+
 const MODE_NAME = ['FOOT', 'IN_CAR', 'FLUNG', 'STUNNED'];
 const STATE_NAME = ['PARKED', 'TRAFFIC', 'PLAYER', 'WRECK', 'BURNING', 'STOPPED'];
 const modeName = (m) => MODE_NAME[m] || ('?' + m);
@@ -78,6 +229,8 @@ const modeName = (m) => MODE_NAME[m] || ('?' + m);
 // ---------------------------------------------------------------- the run
 async function runScenarios(page, args, report) {
   let shotNo = 0;
+
+  await page.evaluate(installStaging);
 
   const st = () => page.evaluate(() => window.__game.state());
   const step = (n) => page.evaluate((k) => window.__game.step(k), n);
@@ -153,7 +306,20 @@ async function runScenarios(page, args, report) {
     `nearestCar=${s.nearestCar} at ${pk.nearestDist} m after ${walked} ticks of forward`);
   const hud = await ev(checkHud, false);
   check(arrival, 'the HUD is built', hud.problems.length === 0, hud.problems.length ? hud.problems.join('; ') : hud.found.join(', '));
+  // The arrival frame is the game's own chase camera and stays that way as long as it is clear:
+  // __stage is handed the chase camera's exact distance, height and aim, so candidate 0 IS the
+  // chase shot. It only moves — the same swing round the player a drag of the mouse would do — if
+  // a lamp post is standing in the sight line, which at the plaza kerb it often is.
+  const arr = await ev((o) => {
+    const gd = window.__game.gd;
+    const dx = gd.camX - gd.playerX, dz = gd.camZ - gd.playerZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    return window.__stage(gd.playerX, gd.playerZ, gd.camY, dist, Math.atan2(dx, dz), o,
+      gd.camLookX, gd.camLookY, gd.camLookZ, true);
+  }, [0, 25 * DEG, -25 * DEG, 45 * DEG, -45 * DEG]);
+  if (arr.i !== 0) arrival.note = stageNote(arr, 'the chase camera swung round the player (the same move a drag of the mouse makes), keeping its own distance, height and aim point');
   await shot(arrival, 'arrival');
+  if (arr.i !== 0) await ev(() => window.__game.clearFreeCamera());
   arrival.state = s;
 
   // ------------------------------------------------------------ 2. steal
@@ -229,18 +395,19 @@ async function runScenarios(page, args, report) {
   check(crash, 'the player is still in the car', s.playerMode === PLAYER_MODE.IN_CAR, `playerMode=${modeName(s.playerMode)}`);
   // The chase camera sits directly behind a 12 m bus, which hides the entire crash: the car it
   // rear-ended, the crumpled nose and the sparks are all on the far side of the roof. Three-quarter
-  // view from the driver's side, level with the impact, while the particles are still alive.
-  await ev(() => {
+  // view from the driver's side, level with the impact, while the particles are still alive —
+  // 10 m out at 50.7 deg off the nose — the old (left 11, front 9) offset in polar form, pulled in
+  // from 14.2 m and aimed at the car's own nose rather than 4.5 m past it, because the thing the
+  // scenario asserts is the crumpled bodywork and at 14 m behind a 12 m bus it was 80 px of green.
+  // __stage takes it to the passenger side, or 20 deg round, if a pole or a wall is in the way.
+  const crashCam = await ev((o) => {
     const gd = window.__game.gd, c = gd.playerCar;
     const yaw = gd.carYaw[c];
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    const lx = Math.cos(yaw), lz = -Math.sin(yaw);
-    window.__game.setFreeCamera(
-      gd.carX[c] + lx * 11 + fx * 9, 4, gd.carZ[c] + lz * 11 + fz * 9,
-      gd.carX[c] + fx * 4.5, 1.2, gd.carZ[c] + fz * 4.5);
-  });
-  await ev(() => window.__game.render());
-  crash.note = 'the crash frame is a three-quarter view from the driver\'s side (setFreeCamera) — the chase camera is behind a 12 m bus and the whole impact happens on the far side of it';
+    return window.__stage(gd.carX[c], gd.carZ[c], 3.2, 10, yaw, o,
+      gd.carX[c] + fx * 2.2, 1.1, gd.carZ[c] + fz * 2.2);
+  }, offsets(Math.atan2(11, 9)));
+  crash.note = stageNote(crashCam, 'the crash frame is a three-quarter view from the driver\'s side (setFreeCamera) — the chase camera is behind a 12 m bus and the whole impact happens on the far side of it');
   await shot(crash, 'crash');
   await ev(() => window.__game.clearFreeCamera());
   crash.state = s;
@@ -267,19 +434,15 @@ async function runScenarios(page, args, report) {
   // A fixed free camera for the whole burning -> explosion -> wreck triptych, planted the moment
   // the car is confirmed burning: 16 m from the car along its own forward rotated 35 deg, so the
   // flash and the fireball read from the side instead of dead ahead, and all three frames share one
-  // consistent angle instead of jump-cutting between them.
-  // -35 deg, not +35: at this crash spot (seed 7) the car ends up hard against a block of
-  // buildings and +35 plants the camera 4 m from a tower's west face, staring into the wall
-  // instead of the wreck (checked with the colMinX/Z grid: +35 -> 4.1 m to the nearest building,
-  // -35 -> 10.2 m clear). The brief fixes the angle's magnitude, not which side it falls on.
-  await ev(() => {
+  // consistent angle instead of jump-cutting between them. Which side that 35 deg falls on is
+  // __stage's call: at this crash spot (seed 7) the car ends up hard against a block of buildings
+  // and one side plants the camera 4 m from a tower's west face, staring into the wall instead of
+  // the wreck. The brief fixes the angle's magnitude, not its sign.
+  const wreckCam = await ev((o) => {
     const gd = window.__game.gd, c = gd.playerCar;
-    const carX = gd.carX[c], carZ = gd.carZ[c], yaw = gd.carYaw[c];
-    const camYaw = yaw - 35 * Math.PI / 180;
-    const dx = Math.sin(camYaw), dz = Math.cos(camYaw);
-    window.__game.setFreeCamera(carX - dx * 16, 5, carZ - dz * 16, carX, 1.2, carZ);
-  });
-  wreck.note = 'burning/explosion/wreck frames use a fixed free camera 16 m from the car';
+    return window.__stage(gd.carX[c], gd.carZ[c], 5, 16, gd.carYaw[c], o, gd.carX[c], 1.2, gd.carZ[c]);
+  }, offsets((180 - 35) * DEG));
+  wreck.note = stageNote(wreckCam, 'burning/explosion/wreck frames use one fixed free camera 16 m from the car, 35 deg off its nose');
   // burnTime is 3 s = 180 ticks. peek tells us exactly how many are left, so the burning frame is
   // 4 ticks before the blast and the explosion frame 7 after it, whatever chunk found the fire.
   const toBlast = pk.burnTicks;
@@ -436,19 +599,19 @@ async function runScenarios(page, args, report) {
   await hold({ forward: true });
   await step(110);
   // The preset's own vantage is 30 m back down the avenue, which makes the car a speck. Same idea
-  // — a low kerbside camera watching the traffic go by — moved to the kerb the car is about to pass.
-  await ev(() => {
+  // — a low kerbside camera watching the traffic go by — moved to the kerb the car is about to
+  // pass: 12.3 m ahead of it at 26.6 deg off the nose, the old (front 11, right 5.5) offset in
+  // polar form. This is the frame a lamp post used to stand in the middle of, so __stage gets to
+  // pick the kerb.
+  const playCam = await ev((o) => {
     const gd = window.__game.gd, c = gd.playerCar;
     const yaw = gd.carYaw[c];
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    const rx = -Math.cos(yaw), rz = Math.sin(yaw);
-    window.__game.setFreeCamera(
-      gd.carX[c] + fx * 11 + rx * 5.5, 1.7, gd.carZ[c] + fz * 11 + rz * 5.5,
+    return window.__stage(gd.carX[c], gd.carZ[c], 1.7, Math.sqrt(11 * 11 + 5.5 * 5.5), yaw, o,
       gd.carX[c] + fx * 1, 0.95, gd.carZ[c] + fz * 1);
-  });
-  await ev(() => window.__game.render());
+  }, offsets(Math.atan2(-5.5, 11)));
   s = await st();
-  play.note = `the player's car is teleported into the lane the "street" preset watches (x=${-B.laneOffset}, z=-6) and driven down it; the camera is the same low kerbside vantage as the preset, moved to the kerb the car is passing`;
+  play.note = stageNote(playCam, `the player's car is teleported into the lane the "street" preset watches (x=${-B.laneOffset}, z=-6) and driven down it; the camera is the same low kerbside vantage as the preset, moved to the kerb the car is passing`);
   check(play, 'the player is at the wheel', s.playerMode === PLAYER_MODE.IN_CAR, `playerMode=${modeName(s.playerMode)}, car ${s.playerCar} (${secondName})`);
   check(play, 'moving, with the HUD up', s.speed > 3, `speed=${s.speed} m/s (${Math.round(s.speed * 3.6)} km/h)`);
   const shown = await ev(checkHud, false);

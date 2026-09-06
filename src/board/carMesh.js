@@ -39,6 +39,11 @@ const BED = 0x3b3f47;           // pickup bed floor
 const SILL = 0x2a2d33;
 const GLASS_WRECK = 0x111111;
 const BRAKE_HOT = 0xfff1c0;     // reverse lights
+// Health-driven soot, applied ONCE per tier crossing (see updateCars): how far a hurt car's paint
+// goes toward the wreck colour at "smoking" and "on fire". A car at 2 health used to have flawless
+// paint until the moment it exploded; now it looks like it has been through something.
+const SOOT_MIX = [0, 0.18, 0.40];
+const SOOT_GLASS = 0.5;         // glass soots at half the paint's rate (toward GLASS_WRECK)
 const WRECK_MIX = 0.95;         // T9: the mix happens in LINEAR space, where 0.7 of the way from
                                 // a bright bus to charcoal still reads as rust rather than char
 const DENT_DARKEN = 0.88;       // a dented panel loses 12% of its colour
@@ -433,8 +438,27 @@ export function buildCarGeometry(type, paint, b) {
   geo.userData = {
     tailStart, tailCount,
     original: Float32Array.from(geo.attributes.position.array),
+    glass: glassMask(geo, b),
   };
   return geo;
+}
+
+// Which vertices are window glass, decided once on the pristine colours. Soot and char both need
+// to treat glass differently from paint, and by the time they run the colours have been darkened
+// by dents (or by an earlier soot pass), so matching the live colour against b.colors.glass is not
+// a question that stays answerable. One byte per vertex, built with the geometry.
+function glassMask(geo, b) {
+  const cA = geo.attributes.color.array;
+  const n = geo.attributes.color.count;
+  const mask = new Uint8Array(n);
+  _col.setHex(b.colors.glass);
+  const gr = _col.r, gg = _col.g, gb = _col.b;
+  for (let v = 0; v < n; v++) {
+    const j = v * 3;
+    if (Math.abs(cA[j] - gr) < GLASS_EPS && Math.abs(cA[j + 1] - gg) < GLASS_EPS
+      && Math.abs(cA[j + 2] - gb) < GLASS_EPS) mask[v] = 1;
+  }
+  return mask;
 }
 
 // ---------------------------------------------------------------- wheels
@@ -474,8 +498,10 @@ function applyDent(geo, lx, ly, lz, strength) {
   const pos = geo.attributes.position, colAttr = geo.attributes.color;
   const p = pos.array, cA = colAttr.array;
   const s = strength < 20 ? strength : 20;
-  const r = 1.0 + s * 0.06;
-  const depth = 0.4 * (strength < 15 ? strength / 15 : 1);
+  // Deeper and wider than the first pass: at 0.4 m over a 1.7 m radius a 60 km/h shunt was a
+  // ripple you had to hunt for. A crash has to read at a glance from ten metres away.
+  const r = 1.4 + s * 0.06;
+  const depth = 0.7 * (strength < 15 ? strength / 15 : 1);
   const r2 = r * r;
   const n = pos.count;
   let touched = 0;
@@ -508,21 +534,46 @@ function applyDent(geo, lx, ly, lz, strength) {
   return touched;
 }
 
-// Char: everything 70% of the way to b.colors.wreck, the glass to near-black, then six dents taken
-// from the body's own hull so no two wrecks crumple the same way.
-function applyWreck(geo, b, seed) {
+// Soot: `mix` of the way from wherever the paint is now to b.colors.wreck, and half that for the
+// glass on its way to near-black. Colour only — no vertices move, no normals are recomputed — and
+// it is called once per health tier crossed, never per frame.
+function applySoot(geo, b, mix) {
   const colAttr = geo.attributes.color, cA = colAttr.array;
+  const mask = geo.userData.glass;
   const n = colAttr.count;
   _col.setHex(b.colors.wreck);
   const wr = _col.r, wg = _col.g, wb = _col.b;
-  _col.setHex(b.colors.glass);
-  const gr = _col.r, gg = _col.g, gb = _col.b;
   _col.setHex(GLASS_WRECK);
   const kr = _col.r, kg = _col.g, kb = _col.b;
   for (let v = 0; v < n; v++) {
     const j = v * 3;
-    if (Math.abs(cA[j] - gr) < GLASS_EPS && Math.abs(cA[j + 1] - gg) < GLASS_EPS
-      && Math.abs(cA[j + 2] - gb) < GLASS_EPS) {
+    if (mask && mask[v]) {
+      const m = mix * SOOT_GLASS;
+      cA[j] += (kr - cA[j]) * m;
+      cA[j + 1] += (kg - cA[j + 1]) * m;
+      cA[j + 2] += (kb - cA[j + 2]) * m;
+    } else {
+      cA[j] += (wr - cA[j]) * mix;
+      cA[j + 1] += (wg - cA[j + 1]) * mix;
+      cA[j + 2] += (wb - cA[j + 2]) * mix;
+    }
+  }
+  colAttr.needsUpdate = true;
+}
+
+// Char: everything 95% of the way to b.colors.wreck, the glass to near-black, then six dents taken
+// from the body's own hull so no two wrecks crumple the same way.
+function applyWreck(geo, b, seed) {
+  const colAttr = geo.attributes.color, cA = colAttr.array;
+  const mask = geo.userData.glass;
+  const n = colAttr.count;
+  _col.setHex(b.colors.wreck);
+  const wr = _col.r, wg = _col.g, wb = _col.b;
+  _col.setHex(GLASS_WRECK);
+  const kr = _col.r, kg = _col.g, kb = _col.b;
+  for (let v = 0; v < n; v++) {
+    const j = v * 3;
+    if (mask && mask[v]) {
       cA[j] = kr; cA[j + 1] = kg; cA[j + 2] = kb;
     } else {
       cA[j] += (wr - cA[j]) * WRECK_MIX;
@@ -586,6 +637,7 @@ export function createCars(view, gd, b) {
     casting: new Uint8Array(b.maxCars),      // T12: 1 while this slot is a shadow caster
     lastState: new Uint8Array(b.maxCars),
     lastBrake: new Uint8Array(b.maxCars),
+    lastTier: new Uint8Array(b.maxCars),     // 0 healthy, 1 below smokeHealth, 2 below fireHealth
   };
   cars.lastState.fill(255);
   cars.lastBrake.fill(255);
@@ -611,6 +663,7 @@ export function updateCars(cars, view, gd, b, dtFrame) {
       mesh.geometry = buildCarGeometry(gd.carType[i], gd.carPaint[i], b);
       cars.built[i] = 1;
       cars.lastBrake[i] = 255;                        // fresh geometry: brake state unknown
+      cars.lastTier[i] = 0;                           // and clean paint again
       if (state === CAR_STATE.WRECK) applyWreck(mesh.geometry, b, i);
     } else if (cars.built[i] && state === CAR_STATE.WRECK && cars.lastState[i] !== CAR_STATE.WRECK) {
       applyWreck(mesh.geometry, b, i);
@@ -620,6 +673,21 @@ export function updateCars(cars, view, gd, b, dtFrame) {
 
     if (!cars.built[i]) continue;
     const wrecked = state === CAR_STATE.WRECK || state === CAR_STATE.BURNING;
+
+    // Soot, on the health tiers particles.js already smokes and burns at. Health only ever falls
+    // and carDirty resets the tier with the geometry, so this fires at most twice in a car's life
+    // — one colour pass per tier CROSSED, so 0 -> 2 in a single hit lands in the same place as
+    // 0 -> 1 -> 2 does. A wreck skips it: applyWreck is the whole char.
+    if (!wrecked) {
+      const h = gd.carHealth[i];
+      const tier = h < b.fireHealth ? 2 : (h < b.smokeHealth ? 1 : 0);
+      if (tier > cars.lastTier[i]) {
+        for (let t = cars.lastTier[i] + 1; t <= tier; t++) applySoot(mesh.geometry, b, SOOT_MIX[t]);
+        cars.lastTier[i] = tier;
+        cars.lastBrake[i] = 255;      // soot went over the taillights too; repaint them below
+      }
+    }
+
     const brake = wrecked ? 0 : gd.carBrakeLight[i];
     if (!wrecked && cars.lastBrake[i] !== brake) {
       setTailColour(mesh.geometry,

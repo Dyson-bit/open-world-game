@@ -19,6 +19,7 @@ const RESPAWN_TRIES = 24;
 const SCAN_TICKS = 30;       // the traffic manager only scans twice a second
 const WRECK_RECYCLE_DIST = 300;
 const POOL_SLACK = 10;       // recycle far wrecks once the pool is this close to full
+const ABANDON_KEEP_DIST = 120;  // never reclaim the car he just got out of while he is this close
 const IN_VIEW_PENALTY = 500; // metres-equivalent cost of popping a car into the camera's view
 // T12: the car in the guaranteed nearest spot is the player's first steal, and the game is about
 // speed — seed 7 opened the game with a BUS, which is the slowest thing in the set. Redraw its
@@ -285,20 +286,28 @@ export function manageTraffic(gd, b) {
   const px = gd.playerX, pz = gd.playerZ;
   const recycle2 = b.recycleDist * b.recycleDist;
   const wreck2 = WRECK_RECYCLE_DIST * WRECK_RECYCLE_DIST;
+  const abandon2 = ABANDON_KEEP_DIST * ABANDON_KEEP_DIST;
   const poolTight = gd.carCount >= b.maxCars - POOL_SLACK;
 
   let live = 0;
   for (let i = 0; i < gd.carCount; i++) {
     const s = gd.carState[i];
     const traffic = s === CAR_STATE.TRAFFIC || s === CAR_STATE.STOPPED;
-    if (!traffic && !(poolTight && s === CAR_STATE.WRECK)) continue;
+    // A car the player abandoned is PARKED with no kerbside spot to its name (enterCar gave the
+    // spot back), and nothing else in the game ever looks at it again: forty steals used to take
+    // forty cars out of circulation for good and permanently halve the traffic. It is reclaimable
+    // on exactly the same terms as a wreck — only when the pool is tight, and only from far enough
+    // away that nobody sees it go.
+    const reclaimable = s === CAR_STATE.WRECK || (s === CAR_STATE.PARKED && gd.carPark[i] < 0);
+    if (!traffic && !(poolTight && reclaimable)) continue;
 
     const dx = gd.carX[i] - px, dz = gd.carZ[i] - pz;
     const d2 = dx * dx + dz * dz;
     if (traffic) {
       if (d2 > recycle2) respawnOnLane(gd, b, i);
       live++;
-    } else if (d2 > wreck2) {
+    } else if (d2 > wreck2 && i !== gd.nearestCar
+      && !(i === gd.playerLastCar && d2 < abandon2)) {
       if (respawnOnLane(gd, b, i)) live++;
     }
   }

@@ -6,6 +6,7 @@ import { allocateGameData } from '../src/gameData.js';
 import { generateCity, isOnRoad } from '../src/logic/city.js';
 import { spawnCar, pickType, pickPaint, placeParkedCars, placeTraffic, manageTraffic } from '../src/logic/spawn.js';
 import { startGame, tick } from '../src/logic/tick.js';
+import { enterCar, exitCar } from '../src/logic/player.js';
 
 const b = balance;
 const CRUISER = b.carName.indexOf('CRUISER');
@@ -315,6 +316,52 @@ test('manageTraffic recycles distant wrecks once the pool is nearly full', () =>
   assert.equal(gd.carDirty[w], 1);
   const d = Math.hypot(gd.carX[w] - gd.playerX, gd.carZ[w] - gd.playerZ);
   assert.ok(d < b.respawnMaxDist + 40, `recycled wreck landed ${d} m away`);
+});
+
+test('45 steal-and-abandon cycles do not leak the car pool', () => {
+  // A car the player gets out of is PARKED with carPark < 0 — it owns no kerbside spot and no
+  // other system ever looks at it again. Before manageTraffic learned to reclaim them, forty-five
+  // steals put forty-five cars beyond recall, filled the pool to maxCars so the top-up could not
+  // spawn either, and left the city with 15 moving cars out of 40 — permanently.
+  const gd = bare();
+  startGame(gd, b);
+  const before = countState(gd, CAR_STATE.TRAFFIC) + countState(gd, CAR_STATE.STOPPED);
+  assert.equal(before, b.trafficCount, 'the city starts with a full complement of traffic');
+
+  // Four corners of the city, 380 m apart: the player abandons a car and walks (well, teleports)
+  // out of its neighbourhood, which is the only thing that makes it reclaimable.
+  const corners = [[-190, -190], [190, -190], [190, 190], [-190, 190]];
+  for (let n = 0; n < 45; n++) {
+    let c = -1, bestD = Infinity;
+    for (let i = 0; i < gd.carCount; i++) {
+      if (gd.carState[i] !== CAR_STATE.TRAFFIC) continue;
+      const dx = gd.carX[i] - gd.playerX, dz = gd.carZ[i] - gd.playerZ;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) { bestD = d; c = i; }
+    }
+    assert.ok(c >= 0, `no traffic car left to steal on cycle ${n}`);
+    enterCar(gd, b, c);
+    gd.input.forward = 1;
+    for (let k = 0; k < 120; k++) tick(gd, b);
+    gd.input.forward = 0;
+    exitCar(gd, b);
+    const p = corners[n % 4];
+    gd.playerX = p[0]; gd.playerZ = p[1];
+    gd.playerVX = 0; gd.playerVZ = 0;
+    for (let k = 0; k < 5; k++) tick(gd, b);
+  }
+
+  for (let k = 0; k < 600; k++) tick(gd, b);
+
+  const after = countState(gd, CAR_STATE.TRAFFIC) + countState(gd, CAR_STATE.STOPPED);
+  let stranded = 0;
+  for (let i = 0; i < gd.carCount; i++) {
+    if (gd.carState[i] === CAR_STATE.PARKED && gd.carPark[i] < 0) stranded++;
+  }
+  assert.ok(after >= b.trafficCount - 2,
+    `traffic collapsed: ${before} -> ${after} live cars after 45 steals (want >= ${b.trafficCount - 2}), ` +
+    `${stranded} abandoned cars still holding a slot, carCount=${gd.carCount}`);
+  assert.ok(gd.carCount <= b.maxCars);
 });
 
 // ---------------------------------------------------------------------- determinism

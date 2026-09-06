@@ -18,9 +18,6 @@ const TUMBLE_RATE = 9;      // radians per second while flung
 const ENGINE_BRAKE = -0.12; // throttle applied against the direction of travel when coasting
 const COAST_DEADBAND = 0.5; // below this speed the engine lets go entirely
 
-// Scratch for the building push-out. Module scope: updatePlayer allocates nothing.
-const _push = new Float32Array(2);
-
 export function updatePlayer(gd, b) {
   const dt = b.dt;
   const inp = gd.input;
@@ -87,15 +84,12 @@ function updateFoot(gd, b, inp, dt) {
   if (al > step) { const k = step / al; ax *= k; az *= k; }
   let vx = gd.playerVX + ax, vz = gd.playerVZ + az;
 
-  let px = gd.playerX + vx * dt;
-  let pz = gd.playerZ + vz * dt;
+  const px = gd.playerX + vx * dt;
+  const pz = gd.playerZ + vz * dt;
 
-  // Static world first (Task 7 owns the real routine), then the buildings pass below, which is a
-  // no-op once pushOutCircle handles them too.
+  // One pass over the static world: pushOutCircle (collision.js) does buildings, props and cars.
   pushOutCircle(gd, b, px, pz, b.playerRadius);
-  px = gd.scratch[0]; pz = gd.scratch[1];
-  pushOutOfBuildings(gd, b, px, pz, b.playerRadius);
-  const nx = _push[0], nz = _push[1];
+  const nx = gd.scratch[0], nz = gd.scratch[1];
 
   // Anything a wall gave back is velocity that was heading into the wall: drop that component so
   // the player slides along the face instead of grinding to a halt against it.
@@ -126,53 +120,6 @@ function updateFoot(gd, b, inp, dt) {
   if (gd.playerWalkPhase > TWO_PI * 1024) gd.playerWalkPhase -= TWO_PI * 1024;
 
   if (inp.action && gd.nearestCar >= 0) enterCar(gd, b, gd.nearestCar);
-}
-
-// Circle vs the static building AABBs in the 3x3 collider-grid cells around the player. Task 7's
-// pushOutCircle will do this (and props, and cars) properly; until then this is what keeps the
-// player on the street. Harmless once the real one lands: a circle already outside every box does
-// not move. Result in _push.
-function pushOutOfBuildings(gd, b, x, z, r) {
-  const dim = b.gridDim, size = b.gridCellSize, o = b.gridOrigin;
-  const cx0 = Math.floor((x - o) / size), cz0 = Math.floor((z - o) / size);
-  const r2 = r * r;
-  for (let jz = -1; jz <= 1; jz++) {
-    const cz = cz0 + jz;
-    if (cz < 0 || cz >= dim) continue;
-    for (let jx = -1; jx <= 1; jx++) {
-      const cx = cx0 + jx;
-      if (cx < 0 || cx >= dim) continue;
-      const c = cz * dim + cx;
-      const start = gd.cGridStart[c], n = gd.cGridCount[c];
-      for (let k = 0; k < n; k++) {
-        const i = gd.cGridItems[start + k];
-        const minX = gd.colMinX[i], maxX = gd.colMaxX[i];
-        const minZ = gd.colMinZ[i], maxZ = gd.colMaxZ[i];
-        const qx = x < minX ? minX : (x > maxX ? maxX : x);
-        const qz = z < minZ ? minZ : (z > maxZ ? maxZ : z);
-        const dx = x - qx, dz = z - qz;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= r2) continue;
-        if (d2 > 1e-12) {
-          const d = Math.sqrt(d2);
-          const push = (r - d) / d;
-          x += dx * push; z += dz * push;
-        } else {
-          // dead centre inside the box: out through the nearest face
-          const dW = x - minX, dE = maxX - x, dN = z - minZ, dS = maxZ - z;
-          let m = dW, face = 0;
-          if (dE < m) { m = dE; face = 1; }
-          if (dN < m) { m = dN; face = 2; }
-          if (dS < m) { m = dS; face = 3; }
-          if (face === 0) x = minX - r;
-          else if (face === 1) x = maxX + r;
-          else if (face === 2) z = minZ - r;
-          else z = maxZ + r;
-        }
-      }
-    }
-  }
-  _push[0] = x; _push[1] = z;
 }
 
 // ---------------------------------------------------------------- driving

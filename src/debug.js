@@ -79,7 +79,11 @@ export function installDebug(api) {
   };
 
   // Nearest live, drivable car by centre distance — no range limit, this is a test hook.
+  // Getting out first matters: enterCar does not, so calling this while already IN_CAR used to
+  // leave the old car stranded in CAR_STATE.PLAYER with nobody in it — a slot no traffic manager
+  // or nearest-car scan would ever touch again.
   api.enterNearestCar = function enterNearestCar() {
+    if (gd.playerMode === PLAYER_MODE.IN_CAR && gd.playerCar >= 0) logicExitCar(gd, b);
     let best = -1, bestD = Infinity;
     for (let i = 0; i < gd.carCount; i++) {
       const s = gd.carState[i];

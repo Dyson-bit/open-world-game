@@ -91,8 +91,8 @@ differently from run to run.
   "scenarios": [{
     "name": "crash",
     "ok": true,
-    "checks": [{ "name": "the crash cost health", "ok": true, "detail": "health=68.815 after 386 ticks of throttle" }],
-    "state": { "tick": 0, "playerMode": 1, "playerCar": 0, "health": 68.8, "speed": 15.4, "drawCalls": 97, "...": "__game.state()" },
+    "checks": [{ "name": "the crash cost health", "ok": true, "detail": "health=2.651 after 74 ticks of throttle" }],
+    "state": { "tick": 0, "playerMode": 1, "playerCar": 0, "health": 2.7, "speed": 3.1, "drawCalls": 97, "...": "__game.state()" },
     "shot": "captures/04-crash.png",
     "shots": ["captures/04-crash.png"],
     "note": "why the frame is staged the way it is, when it is",
@@ -100,6 +100,12 @@ differently from run to run.
   }]
 }
 ```
+
+Every staged camera picks its vantage through one helper (`__stage`, installed into the page by the
+harness): it scores the candidate angles by how far the camera-to-subject sight line stays from the
+standing props and the building boxes, and how much depth is left behind the subject, then takes the
+shot's natural angle if it is clear and the roomiest alternative if it is not. That is what keeps a
+lamp post out of the middle of a frame; the `note` says which angle won and why.
 
 `fallback` is the honest field: if a scenario could not get there by driving or walking and had to
 teleport, the check still passes but the report says so out loud — a run with no `fallback` key
@@ -123,7 +129,7 @@ Installed by `src/debug.js` for the tools above and for poking at the game in th
 | `setInput({...})` | set held keys / edges (`forward back left right handbrake action camToggle mute`, `orbitDX orbitDY zoom`) |
 | `press(name)` | fire a one-tick edge |
 | `teleport(x, z, yaw)` | move the player, and his car with him |
-| `enterNearestCar()` | steal the closest live car at any range, returns its index |
+| `enterNearestCar()` | steal the closest live car at any range, returns its index (gets out of the current one first) |
 | `exitCar()` | get out |
 | `spawnCar(type, x, z, yaw)` | spawn a parked car, returns its index |
 | `findCar(pred)` | first car index with `pred(i, gd)` true, else -1 |
@@ -142,7 +148,7 @@ Last occurrence wins, so a param appended to the harness base overrides it.
 | `autostart=1` | skip the title card |
 | `headless=1` | pixel ratio 1, `preserveDrawingBuffer`, and the world does not tick until `setAutoTick(true)` or `step()` |
 | `nohud=1` | build the HUD but keep it hidden |
-| `cam=NAME` | apply a camera preset at startup |
+| `cam=NAME` | apply a camera preset at startup, and hold it: the preset is shown *over* the title card instead of the title's slow orbit, so `?cam=skyline` is a postcard even without `autostart=1` |
 | `lineup=1` | spawn one of every car type in a row (for the car-model shot) |
 
 ## Project layout

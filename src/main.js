@@ -96,7 +96,10 @@ function frame(now) {
   frameMs += (dt * 1000 - frameMs) * 0.1;
   fps = frameMs > 0.0001 ? 1000 / frameMs : 0;
 
-  if (!started) titleCamera(dt);
+  // The title card's slow orbit, but only when nothing else has claimed the camera: ?cam=<preset>
+  // without autostart=1 used to be applied once at startup and then overwritten every frame by
+  // this. An explicit preset wins over the title orbit.
+  if (!started && camParam === 'none') titleCamera(dt);
 
   if (autoTick && started) {
     acc += dt;
