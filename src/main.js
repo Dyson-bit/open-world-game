@@ -17,13 +17,20 @@ import { installDebug } from './debug.js';
 
 // ---------------------------------------------------------------- URL params
 const params = new URLSearchParams(location.search);
-const seedParam = params.get('seed');
+// Last occurrence wins. tools/shot.mjs builds a base query (headless=1&autostart=1&seed=7) and
+// appends whatever --url asked for, so `--url "&autostart=0"` has to override the base rather than
+// be shadowed by it — which is what URLSearchParams.get, returning the *first* value, would do.
+function param(name) {
+  const all = params.getAll(name);
+  return all.length ? all[all.length - 1] : null;
+}
+const seedParam = param('seed');
 const seed = seedParam === null || seedParam === '' ? balance.seed : (Number(seedParam) | 0);
-const autostart = params.get('autostart') === '1';
-const headless = params.get('headless') === '1';
-const nohud = params.get('nohud') === '1';
-const camParam = params.get('cam') || 'none';
-const lineup = params.get('lineup') === '1';
+const autostart = param('autostart') === '1';
+const headless = param('headless') === '1';
+const nohud = param('nohud') === '1';
+const camParam = param('cam') || 'none';
+const lineup = param('lineup') === '1';
 
 // ---------------------------------------------------------------- data
 const b = balance;
@@ -51,7 +58,7 @@ const character = createCharacter(view, gd, b);
 const particles = createParticles(view, gd, b);
 const hud = createHud(hudRoot, gd, b, { nohud });
 const audio = createAudio(gd, b);
-attachInput(canvas, gd, b, { onFirstGesture: start });
+attachInput(canvas, gd, b, { onFirstGesture: firstGesture });
 
 // ---------------------------------------------------------------- run state
 let started = autostart;
@@ -81,6 +88,7 @@ requestAnimationFrame(frame);
 // ---------------------------------------------------------------- loop
 function frame(now) {
   requestAnimationFrame(frame);
+  consumeMute();
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.1) dt = 0.1;
@@ -126,6 +134,22 @@ function titleCamera(dt) {
   gd.camFov = b.camFovMin;
 }
 
+// The first click or keypress: start the audio context (which needs a gesture) and drop the title.
+// autostart=1 skips the title, so the unlock has to hang off the gesture itself, not off start().
+function firstGesture() {
+  audio.unlock();
+  start();
+}
+
+// M is an input edge, and Logic clears every edge at the end of the tick that runs after it — so
+// the Board would never see it. main consumes it here instead, before any tick can eat it, and
+// zeroes it so a held frame cannot toggle twice. Nothing in Logic reads input.mute.
+function consumeMute() {
+  if (!gd.input.mute) return;
+  gd.input.mute = 0;
+  audio.toggleMute();
+}
+
 function start() {
   if (started) return;
   started = true;
@@ -146,6 +170,7 @@ function setAutoTick(on) {
 // n ticks then exactly one Board update + render, synchronously.
 function step(n) {
   const count = n === undefined ? 1 : (n | 0);
+  consumeMute();
   for (let i = 0; i < count; i++) tick(gd, b);
   frameUpdate(Math.max(count, 1) * b.dt);
 }
