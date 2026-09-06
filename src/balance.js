@@ -55,7 +55,9 @@ export const balance = {
 
   // ---- traffic / population ----
   trafficCount: 40,
-  parkedCount: 70,
+  // T12: 70 parked cars over 144 road segments left the kerbs looking empty. 90 is the most the
+  // pool allows — validate() wants trafficCount + parkedCount + 20 <= maxCars, and 40+90+20 = 150.
+  parkedCount: 90,
   recycleDist: 260,
   respawnMinDist: 120,
   respawnMaxDist: 220,
@@ -172,7 +174,8 @@ export const balance = {
     lowrise:  [0xf8e8c8, 0xffc09a, 0xf2efe6, 0xfaf0dc, 0xffd6a5, 0xe6d5b8, 0xd8e8d0, 0xf5b5a0, 0xc8dff0],
     landmark: [0xf7f2e8, 0x6fa3d8],
     band:     [0x2f3b52, 0x8a3b2f, 0x2f6b5a, 0xc96a3a, 0x3e4a63, 0x6b3f7a],
-    window:   0x2a3448,
+    // T12: 0x2a3448 was near-black against pale downtown paint and read as tape, not glass.
+    window:   0x35415a,
     roofProp: 0xa9a49a,
   },
   colors: {
@@ -184,7 +187,9 @@ export const balance = {
     pine: 0x2f8f5b, palm: 0x4aa84e, lamp: 0x3b3f4a, lampHead: 0xfff1c0, hydrant: 0xe0453a,
     mailbox: 0x3b62c9, bin: 0x4b6a3e, bench: 0xb56b3f, cone: 0xff7a1a, fountain: 0xd8d0c0,
     glass: 0x2a3d55, tyre: 0x23252b, hub: 0xb9bcc4, chrome: 0xd8dde3, headlight: 0xfff3c4,
-    taillight: 0x7a1414, taillightOn: 0xff3b2e, wreck: 0x2e2a28, skid: 0x2a2a2e,
+    // T12: wreck was 0x2e2a28 — a warm grey that, lit by a 24 deg golden-hour sun, came back
+    // brown rather than charred. 0x1e1b19 is the same hue two stops down and reads as burnt.
+    taillight: 0x7a1414, taillightOn: 0xff3b2e, wreck: 0x1e1b19, skid: 0x2a2a2e,
     skin: 0xf1c27d, shirt: 0xe84a5f, pants: 0x2f4a7a, shoes: 0x2b2b2b, hair: 0x3b2a1e,
   },
   // T3: sun 2.4 / hemi 1.1 left cast shadows barely darker than lit tarmac — at 24 deg elevation a

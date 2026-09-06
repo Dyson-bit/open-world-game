@@ -25,6 +25,12 @@ import { CAR_STATE } from '../balance.js';
 
 const CULL_DIST = 420;          // metres from the camera past which a car stops drawing
 const CULL_DIST2 = CULL_DIST * CULL_DIST;
+// T12: ~117 bodies were rendered into the shadow map every frame, and past this range a car's
+// shadow is a couple of pixels in a 4096 map that the sun's own 110 m shadow box mostly clips
+// anyway. Flipping castShadow costs a material recompile if it thrashes, so the flag is only
+// written when it actually changes.
+const SHADOW_DIST = 140;
+const SHADOW_DIST2 = SHADOW_DIST * SHADOW_DIST;
 const PARKED_WHEEL_Y = -10;     // where a culled car's wheels go to wait
 
 const BUMPER = 0x3a3f47;        // dark chrome — brighter chrome is kept for thin trim
@@ -577,12 +583,14 @@ export function createCars(view, gd, b) {
     meshes, wheels, material,
     built: new Uint8Array(b.maxCars),
     hidden: new Uint8Array(b.maxCars),
+    casting: new Uint8Array(b.maxCars),      // T12: 1 while this slot is a shadow caster
     lastState: new Uint8Array(b.maxCars),
     lastBrake: new Uint8Array(b.maxCars),
   };
   cars.lastState.fill(255);
   cars.lastBrake.fill(255);
   cars.hidden.fill(1);
+  cars.casting.fill(1);                      // createCars leaves every mesh castShadow = true
   view.cars = cars;
   return cars;
 }
@@ -635,7 +643,13 @@ export function updateCars(cars, view, gd, b, dtFrame) {
     if (!cars.built[i]) continue;
     const x = gd.carX[i], z = gd.carZ[i];
     const dx = x - camX, dz = z - camZ;
-    if (dx * dx + camY * camY + dz * dz > CULL_DIST2) {
+    const d2 = dx * dx + camY * camY + dz * dz;
+    const cast = d2 < SHADOW_DIST2 ? 1 : 0;
+    if (cars.casting[i] !== cast) {
+      mesh.castShadow = cast === 1;
+      cars.casting[i] = cast;
+    }
+    if (d2 > CULL_DIST2) {
       if (cars.hidden[i]) continue;
       mesh.visible = false;
       cars.hidden[i] = 1;

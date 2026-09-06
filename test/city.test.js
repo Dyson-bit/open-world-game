@@ -227,18 +227,26 @@ test('the plaza landmark tower has a collider over 60 m tall', () => {
 
 test('only cones stand on the road, and every prop is a real prop', () => {
   assert.ok(gd.propCount > 500, `only ${gd.propCount} props`);
-  let cones = 0;
+  let cones = 0, lifted = 0;
   for (let p = 0; p < gd.propCount; p++) {
     const t = gd.propType[p];
     assert.ok(t >= 0 && t < b.propTypeCount, `prop ${p} type ${t}`);
     assert.equal(gd.propState[p], PROP_STATE.STATIC);
-    assert.equal(gd.propY[p], 0);
+    // T12: every prop still stands on the ground except the plaza planter trees, which stand on
+    // the 0.6 m lid of their planter box — the one deliberate use of propY at generation time.
+    if (gd.propY[p] !== 0) {
+      assert.equal(t, PROP_TYPE.TREE, `prop ${p} (type ${t}) is off the ground`);
+      assert.ok(Math.abs(gd.propY[p] - 0.6) < 1e-6, `prop ${p} is at y=${gd.propY[p]}`);
+      lifted++;
+    }
     assert.ok(gd.propScale[p] > 0);
     if (t === PROP_TYPE.CONE) { cones++; continue; }
     assert.equal(isOnRoad(b, gd.propX[p], gd.propZ[p]), false,
       `prop ${p} (type ${t}) at ${gd.propX[p]},${gd.propZ[p]} is on a road`);
   }
   assert.equal(cones, 18, 'six cone clusters of three');
+  // four plaza blocks, 4-6 planters each
+  assert.ok(lifted >= 16 && lifted <= 24, `${lifted} planter trees`);
 });
 
 test('every parking spot is on a road, clear of the cones, and unused', () => {

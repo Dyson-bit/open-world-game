@@ -20,6 +20,10 @@ const SCAN_TICKS = 30;       // the traffic manager only scans twice a second
 const WRECK_RECYCLE_DIST = 300;
 const POOL_SLACK = 10;       // recycle far wrecks once the pool is this close to full
 const IN_VIEW_PENALTY = 500; // metres-equivalent cost of popping a car into the camera's view
+// T12: the car in the guaranteed nearest spot is the player's first steal, and the game is about
+// speed — seed 7 opened the game with a BUS, which is the slowest thing in the set. Redraw its
+// type while it comes up BUS or BOXVAN, bounded so a weight table full of vans can never hang.
+const FIRST_CAR_TRIES = 10;
 
 // -------------------------------------------------------------------------------- spawning
 
@@ -80,6 +84,12 @@ export function pickType(gd, b) {
   return b.carTypeCount - 1;
 }
 
+// The two types nobody wants to open the game in: an 11 m bus and a 26 m/s van.
+function isSluggishType(b, type) {
+  const name = b.carName[type];
+  return name === 'BUS' || name === 'BOXVAN';
+}
+
 // Cabs are always taxi yellow, buses come from their own livery set, everything else is a car.
 export function pickPaint(gd, b, type) {
   const name = b.carName[type];
@@ -108,7 +118,8 @@ export function placeParkedCars(gd, b) {
 
   for (let n = 0; n < b.parkedCount; n++) {
     let spot = -1;
-    if (n === 0 && bestD < Infinity) {
+    const nearest = n === 0 && bestD < Infinity;
+    if (nearest) {
       spot = first;
     } else {
       for (let a = 0; a < TRIES; a++) {
@@ -124,7 +135,10 @@ export function placeParkedCars(gd, b) {
     }
     if (spot < 0) return;                   // no kerbside left at all
 
-    const type = pickType(gd, b);
+    let type = pickType(gd, b);
+    if (nearest) {                          // T12: the first steal is never a bus or a van
+      for (let a = 0; a < FIRST_CAR_TRIES && isSluggishType(b, type); a++) type = pickType(gd, b);
+    }
     const i = spawnCar(gd, b, type, pickPaint(gd, b, type), gd.parkX[spot], gd.parkZ[spot],
       gd.parkYaw[spot], CAR_STATE.PARKED);
     if (i < 0) return;                      // pool full

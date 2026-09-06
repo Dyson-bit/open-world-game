@@ -6,6 +6,7 @@ import { startGame, tick } from '../src/logic/tick.js';
 import { updateCamera } from '../src/logic/camera.js';
 import { enterCar } from '../src/logic/player.js';
 import { spawnCar } from '../src/logic/spawn.js';
+import { updateCarBounds } from '../src/logic/collision.js';
 
 const b = balance;
 
@@ -155,6 +156,25 @@ test('the camera is pushed out of a building it lands inside', () => {
     gd.camZ > gd.colMinZ[t] && gd.camZ < gd.colMaxZ[t];
   assert.ok(!insideXZ || gd.camY > gd.colH[t],
     `camera still buried at ${gd.camX.toFixed(2)}, ${gd.camY.toFixed(2)}, ${gd.camZ.toFixed(2)}`);
+});
+
+// T12: the chase camera could end up inside a parked car behind the player — a bus fills the whole
+// frame with paint. It goes over the roof instead.
+test('the camera is lifted over a car it lands inside', () => {
+  const gd = fresh();
+  const BUS = b.carName.indexOf('BUS');
+  const i = spawnCar(gd, b, BUS, b.busPaint[0], 40, 40, 0, CAR_STATE.PARKED);
+  gd.playerX = 40; gd.playerZ = 40;                 // the target, so the spring does not haul it off
+  gd.camInit = 1;
+  gd.camX = 40; gd.camY = 1.2; gd.camZ = 40;        // inside the bus, below its roof
+  updateCarBounds(gd, b);
+  updateCamera(gd, b);
+
+  const insideXZ = gd.camX > gd.carMinX[i] && gd.camX < gd.carMaxX[i] &&
+    gd.camZ > gd.carMinZ[i] && gd.camZ < gd.carMaxZ[i];
+  assert.ok(insideXZ, 'the test needs the camera to still be over the bus');
+  assert.ok(gd.camY >= b.carHgt[BUS],
+    `camera still inside the bus at y=${gd.camY.toFixed(2)} (roof ${b.carHgt[BUS]})`);
 });
 
 test('camera shake decays and only the player car shakes it', () => {

@@ -52,9 +52,11 @@ export function createHud(root, gd, b, opts) {
   hud.nameEl = div('hud-carname hud-onfoot', tl);
   hud.nameEl.textContent = 'ON FOOT';
   const speedRow = div('hud-speed-row', tl);
+  hud.speedRowEl = speedRow;
   hud.speedEl = span('hud-speed', speedRow);
   hud.speedEl.textContent = '0';
   span('hud-kmh', speedRow).textContent = 'KM/H';
+  speedRow.hidden = true;                  // T12: the game opens on foot, and a man has no speedo
   hud.dmgEl = div('hud-dmg hud-off', tl);
   hud.dmgFillEl = span('hud-dmg-fill', hud.dmgEl);
 
@@ -109,12 +111,16 @@ export function updateHud(hud, gd, b, dtFrame) {
   if (name !== last.name) { hud.nameEl.textContent = name; last.name = name; }
   if (onFoot !== last.onFoot) {
     hud.nameEl.classList.toggle('hud-onfoot', onFoot === 1);
+    // T12: a speedometer on a man is a category error — and while he is being flung across the
+    // street it reads "ON FOOT / 32 KM/H". The whole row goes away when he is not driving.
+    hud.speedRowEl.hidden = onFoot === 1;
     last.onFoot = onFoot;
   }
 
-  const ms = inCar ? Math.abs(gd.carSpeedF[pc]) : gd.playerSpeed;
-  const kmh = Math.round(ms * 3.6);
-  if (kmh !== last.speed) { hud.speedEl.textContent = kmh; last.speed = kmh; }
+  if (inCar) {
+    const kmh = Math.round(Math.abs(gd.carSpeedF[pc]) * 3.6);
+    if (kmh !== last.speed) { hud.speedEl.textContent = kmh; last.speed = kmh; }
+  }
 
   // ---- damage bar
   const dmgOff = inCar ? 0 : 1;

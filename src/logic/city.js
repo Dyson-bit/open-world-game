@@ -239,12 +239,18 @@ function paletteFor(b, ring) {
 
 // Window glazing for one building: one thin band per floor, floor pitch 3.2 m from y = 4.4.
 // Bands that would straddle the step between the base box and the setback box are skipped.
+//
+// T12: the band was 1.1 m on a 3.2 m pitch — a third of every facade in near-black, which from
+// street level reads as zebra tape rather than glass. 0.8 m keeps the same floor rhythm and leaves
+// two thirds of the wall as paint; the lighter buildingPaint.window does the rest.
+const WINDOW_BAND_H = 0.8;
+
 function addBuildingWindows(gd, b, cx, cz, h1, w, d, topY, topW, topD) {
   for (let y = 4.4; y + 0.55 < topY; y += 3.2) {
     if (Math.abs(y - h1) < 0.9) continue;
     const above = y > h1;
     const bw = above ? topW : w, bd = above ? topD : d;
-    addWindowBand(gd, b, cx, y, cz, bw + 0.12, 1.1, bd + 0.12);
+    addWindowBand(gd, b, cx, y, cz, bw + 0.12, WINDOW_BAND_H, bd + 0.12);
   }
 }
 
@@ -363,7 +369,18 @@ function buildPark(gd, b, k) {
   scatterTrees(gd, b, bx, bz, first, 10 + ri(gd, 5), 15, 8);
 }
 
-// Ring-0 blocks: a paved slab, benches and trees; the fountain only on block (4,4).
+// T12 plaza furniture. A ring-0 block was 40 m of bare pavement with four benches and four trees
+// on it, and in the tower's shadow that reads as an unfinished slab. These fill it without
+// touching the landmark's 18 m footprint (±9 m) or the fountain: a ring of planter boxes each
+// with a tree standing on top, two more benches on the axis the diagonal four leave bare, and two
+// lamps flanking the corner that faces the middle of the 2x2 plaza.
+const BENCH_R = 15;
+const PLANTER_R = 12.5;                 // clear of the tower, inside the benches
+const PLANTER_W = 2.4, PLANTER_H = 0.6, PLANTER_D = 1.2;
+const PLANTER_PAINT = 0xd0704f;         // terracotta, from the midrise palette
+const PLAZA_LAMP_A = 16, PLAZA_LAMP_B = 8;
+
+// Ring-0 blocks: a paved slab, benches, planters, lamps and trees; the fountain only on (4,4).
 function buildPlaza(gd, b, k, bi, bj) {
   const bx = gd.blockX[k], bz = gd.blockZ[k];
   addBox(gd, b, bx, 0.06, bz, 40, 0.12, 40, b.colors.plaza);
@@ -372,9 +389,31 @@ function buildPlaza(gd, b, k, bi, bj) {
   // benches on the diagonals, outside the landmark tower's 18 m footprint
   for (let s = 0; s < 4; s++) {
     const a = s * (Math.PI / 2) + Math.PI / 4;
-    const ox = Math.sin(a) * 15, oz = Math.cos(a) * 15;
+    const ox = Math.sin(a) * BENCH_R, oz = Math.cos(a) * BENCH_R;
     addProp(gd, b, PROP_TYPE.BENCH, bx + ox, bz + oz, Math.atan2(-ox, -oz), 1);
   }
+  for (let s = -1; s <= 1; s += 2) {                 // T12: two more, facing the centre
+    const oz = s * BENCH_R;
+    addProp(gd, b, PROP_TYPE.BENCH, bx, bz + oz, Math.atan2(0, -oz), 1);
+  }
+
+  // T12: 4-6 planters. The box is decoration; the tree standing on it is the collider, and its
+  // propY lifts it onto the planter's lid.
+  const planters = 4 + ri(gd, 3);
+  for (let s = 0; s < planters; s++) {
+    const a = s * (Math.PI * 2 / planters);
+    const px = bx + Math.sin(a) * PLANTER_R, pz = bz + Math.cos(a) * PLANTER_R;
+    const boxI = addBox(gd, b, px, PLANTER_H * 0.5, pz, PLANTER_W, PLANTER_H, PLANTER_D, PLANTER_PAINT);
+    if (boxI >= 0) gd.rbYaw[boxI] = a;               // long axis tangential to the ring
+    const tree = addProp(gd, b, PROP_TYPE.TREE, px, pz, rr(gd, 0, 6.283185), rr(gd, 0.7, 0.95));
+    if (tree >= 0) gd.propY[tree] = PLANTER_H;
+  }
+
+  // T12: two lamps flanking the inner corner (the one facing the middle of the plaza group)
+  const sx = bi === 3 ? 1 : -1, sz = bj === 3 ? 1 : -1;
+  addProp(gd, b, PROP_TYPE.LAMP, bx + sx * PLAZA_LAMP_A, bz + sz * PLAZA_LAMP_B, 0, 1);
+  addProp(gd, b, PROP_TYPE.LAMP, bx + sx * PLAZA_LAMP_B, bz + sz * PLAZA_LAMP_A, 0, 1);
+
   scatterTrees(gd, b, bx, bz, first, 4, 15, 9.5);
 }
 

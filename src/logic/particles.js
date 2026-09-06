@@ -76,6 +76,12 @@ const SKID_REAR_F = 0.6;       // ...as a fraction of the half-length, behind th
 
 // ---- integration ----
 const SMOKE_GROW = 0.7;        // metres per second of radius, linear
+// T12: growing to the end left 2 m boxes hanging at full size at the moment they blinked out,
+// which is what made the plume read as boulders. A puff now swells for three quarters of its life
+// and collapses again over the last quarter, twice as fast as it grew.
+const SMOKE_SHRINK_F = 0.25;
+const SMOKE_SHRINK = 1.4;
+const SMOKE_MIN = 0.05;
 const DUST_GROW = 0.9;
 const SHOCK_GROW = 37;         // 1 m -> 14 m over the ring's 0.35 s life
 const SMOKE_BUOY = 0.6;
@@ -422,7 +428,12 @@ function integrate(gd, b) {
     if (type === PARTICLE.SMOKE) {
       vy += SMOKE_BUOY * dt;
       vx *= SMOKE_DRAG; vy *= SMOKE_DRAG_Y; vz *= SMOKE_DRAG;
-      size += SMOKE_GROW * dt;
+      if (life > gd.pMaxLife[i] * SMOKE_SHRINK_F) {
+        size += SMOKE_GROW * dt;
+      } else {
+        size -= SMOKE_SHRINK * dt;
+        if (size < SMOKE_MIN) size = SMOKE_MIN;
+      }
     } else if (type === PARTICLE.FIRE) {
       vy += FIRE_BUOY * dt;
       vx *= FIRE_DRAG; vy *= FIRE_DRAG; vz *= FIRE_DRAG;

@@ -143,6 +143,11 @@ test('an action edge out of range steals nothing', () => {
 
 test('holding forward drives the stolen car more than ten metres', () => {
   const gd = fresh();
+  // T12: parkNextToPlayer points the car south, into the plaza block the spawn sits on, and that
+  // block is now planted (planters, extra benches, lamps and a reshuffled scatter of trees) — the
+  // car meets a tree 8 m in. This test is about the car actually moving under throttle, so take
+  // the street furniture out of its way, exactly as the walking test above does.
+  gd.propState.fill(PROP_STATE.RESTING);
   const i = parkNextToPlayer(gd, 2);
   gd.input.action = 1;
   tick(gd, b);

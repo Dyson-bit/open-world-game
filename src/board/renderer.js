@@ -144,6 +144,8 @@ export function createRenderer(canvas, gd, b, opts) {
   const water = new Mesh(new PlaneGeometry(1600, 700), new MeshLambertMaterial({ color: b.colors.water }));
   water.rotation.x = -Math.PI / 2;
   water.position.set(0, -0.4, b.waterZ + 350);
+  // T12: the pier stands on the bay and cast its shadow into nothing, so it looked pasted on.
+  water.receiveShadow = true;
   scene.add(water);
 
   const shore = new Mesh(new PlaneGeometry(1600, 6), new MeshLambertMaterial({ color: b.colors.waterDeep }));

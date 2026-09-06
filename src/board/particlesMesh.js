@@ -1,9 +1,13 @@
 // Instanced particle boxes, the explosion shock rings and the skid-mark mesh, all driven from the
-// gd pools. Three draw calls for the entire effects layer.
+// gd pools. Four draw calls for the entire effects layer (T12: solid boxes, soft boxes, rings,
+// skids).
 //
-//   - every particle except SHOCK is one instance of a unit box in a single InstancedMesh with
+//   - every particle except SHOCK is one instance of a unit box in an InstancedMesh with
 //     per-instance colour. Unlit (MeshBasicMaterial) on purpose: a flame that the sun can shade is
 //     not a flame, and at golden hour a lit grey box on the shadow side of a car is invisible.
+//     There are TWO of these sharing one box geometry: fire, sparks, debris and glass are solid
+//     lumps, while SMOKE and DUST go through a second mesh at opacity 0.6 (T12) — at 0.9 a smoke
+//     box is a grey boulder you can see the edges of, and a plume is a pile of them.
 //   - SHOCK rings get their own small InstancedMesh of a flat RingGeometry, because a box scaled
 //     flat does not read as a shock wave.
 //   - skid marks are one pre-allocated BufferGeometry of maxSkids * 2 triangles, rewritten from
@@ -35,9 +39,10 @@ const SKID_FADE_START = 30;          // seconds before a mark starts to go
 const SKID_FADE_LEN = 10;            // ...and how long it takes to disappear
 const SKID_DARK = 0.35;              // see writeSkids: the unlit mark has to be pushed under the
                                      // lit road before it reads as rubber rather than paint
-const SMOKE_FADE = 0.45;
+const SMOKE_FADE = 0.45;             // fraction of life over which a puff tapers away on screen
 const SMOKE_HAZE = 0.08;             // how far a dying particle drifts toward the fog colour
-const DUST_HAZE = 0.45;             // fraction of life over which smoke shrinks away
+const DUST_HAZE = 0.45;              // ...and the same for dust, which goes much further
+const SOFT_OPACITY = 0.6;            // T12: smoke and dust are translucent, everything else is not
 const SPARK_STRETCH = 0.06;          // metres of streak per m/s of spark speed
 const TUMBLE = 1.2;                  // radians per second of particle tumble
 
@@ -59,6 +64,18 @@ export function createParticles(view, gd, b) {
   _col.setRGB(1, 1, 1);
   for (let i = 0; i < b.maxParticles; i++) mesh.setColorAt(i, _col);   // allocates instanceColor
   view.scene.add(mesh);
+
+  // ---- soft boxes: smoke and dust, same geometry, half the opacity ------
+  const softMat = new MeshBasicMaterial({
+    vertexColors: false, transparent: true, opacity: SOFT_OPACITY, depthWrite: false,
+  });
+  const soft = new InstancedMesh(boxGeo, softMat, b.maxParticles);
+  soft.frustumCulled = false;
+  soft.matrixAutoUpdate = false;
+  soft.updateMatrix();
+  soft.count = 0;
+  for (let i = 0; i < b.maxParticles; i++) soft.setColorAt(i, _col);
+  view.scene.add(soft);
 
   // ---- shock rings -------------------------------------------------------
   const ringGeo = new RingGeometry(0.7, 1, 40);
@@ -95,6 +112,7 @@ export function createParticles(view, gd, b) {
 
   const fx = {
     mesh, boxGeo, boxMat,
+    soft, softMat,
     rings, ringGeo, ringMat, ringCap,
     skids, skidGeo, skidMat, skidPos, skidCol,
     lastSkidVerts: 0,
@@ -113,9 +131,9 @@ export function updateParticles(fx, view, gd, b) {
 // ---------------------------------------------------------------- particles
 
 function writeParticles(fx, gd, b) {
-  const mesh = fx.mesh, rings = fx.rings;
+  const mesh = fx.mesh, soft = fx.soft, rings = fx.rings;
   const n = gd.pCount;
-  let boxes = 0, ringCount = 0;
+  let boxes = 0, softBoxes = 0, ringCount = 0;
 
   for (let i = 0; i < n; i++) {
     const type = gd.pType[i];
@@ -138,6 +156,12 @@ function writeParticles(fx, gd, b) {
       continue;
     }
 
+    // Smoke and dust draw through the translucent mesh, everything else through the solid one.
+    // Both share the box geometry, so this is one extra draw call for the whole effects layer.
+    const softOne = type === PARTICLE.SMOKE || type === PARTICLE.DUST;
+    const target = softOne ? soft : mesh;
+    const slot = softOne ? softBoxes : boxes;
+
     // ---- colour ----
     if (type === PARTICLE.FIRE) {
       // hotter (and yellower) the younger it is, so a fireball has a white heart and orange edges
@@ -145,7 +169,7 @@ function writeParticles(fx, gd, b) {
       _col.setRGB(gd.pR[i],
         gd.pG[i] + (FIRE_G - gd.pG[i]) * h,
         gd.pB[i] + (FIRE_B - gd.pB[i]) * h * f, SRGBColorSpace);
-    } else if (type === PARTICLE.SMOKE || type === PARTICLE.DUST) {
+    } else if (softOne) {
       // Smoke dissolves into the haze rather than blinking out. The lerp is TINY for smoke and
       // generous for dust because it happens in linear space: 20% of the way from near-black to a
       // sunset peach is already a mid brown, which turns a diesel fire into a dust storm.
@@ -155,7 +179,7 @@ function writeParticles(fx, gd, b) {
     } else {
       _col.setRGB(gd.pR[i], gd.pG[i], gd.pB[i], SRGBColorSpace);
     }
-    mesh.setColorAt(boxes, _col);
+    target.setColorAt(slot, _col);
 
     // ---- pose ----
     if (type === PARTICLE.SPARK) {
@@ -179,14 +203,19 @@ function writeParticles(fx, gd, b) {
     }
     _pos.set(x, y, z);
     _m4.compose(_pos, _quat, _scl);
-    mesh.setMatrixAt(boxes, _m4);
-    boxes++;
+    target.setMatrixAt(slot, _m4);
+    if (softOne) softBoxes++; else boxes++;
   }
 
   mesh.count = boxes;
   if (boxes > 0) {
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+  soft.count = softBoxes;
+  if (softBoxes > 0) {
+    soft.instanceMatrix.needsUpdate = true;
+    if (soft.instanceColor) soft.instanceColor.needsUpdate = true;
   }
   rings.count = ringCount;
   if (ringCount > 0) {

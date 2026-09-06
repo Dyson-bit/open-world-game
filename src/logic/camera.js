@@ -38,6 +38,7 @@ const SHAKE_MAX = 1.2;
 const BUILDING_CLEAR = 0.4;     // how far outside a wall the camera is parked
 const BUILDING_LIFT = 1.5;      // and how far over the roof when the wall is too deep to escape
 const BUILDING_DEEP = 4;
+const CAR_LIFT = 1;             // T12: how far over a car's roof the camera is parked
 
 export function updateCamera(gd, b) {
   if (gd.camFree) return;
@@ -145,6 +146,7 @@ export function updateCamera(gd, b) {
   gd.camInit = 1;
 
   fixInsideBuilding(gd, b);
+  fixInsideCar(gd, b);
 
   // ---- shake: decay first, then this tick's hits, so a hit is always felt at full strength ----
   let decay = 1 - b.camShakeDecay * dt;
@@ -191,5 +193,20 @@ function fixInsideBuilding(gd, b) {
       const lift = gd.colH[i] + BUILDING_LIFT;
       if (gd.camY < lift) gd.camY = lift;
     }
+  }
+}
+
+// T12: the same problem, one storey down. Backing into a kerbside line, or being flung beside one,
+// used to leave the camera inside a parked body — and inside a bus that is a full screen of paint.
+// Cars move every tick, so shoving the camera sideways out of one would jitter; going over the roof
+// is one comparison per car and always resolves. The AABB (refreshed by resolveCollisions earlier
+// in the same tick) is enough: a camera inside the box but outside the OBB is already looking along
+// the bodywork from a hand's breadth away.
+function fixInsideCar(gd, b) {
+  const x = gd.camX, z = gd.camZ;
+  for (let i = 0; i < gd.carCount; i++) {
+    if (x < gd.carMinX[i] || x > gd.carMaxX[i] || z < gd.carMinZ[i] || z > gd.carMaxZ[i]) continue;
+    const h = b.carHgt[gd.carType[i]];
+    if (gd.camY < h) gd.camY = h + CAR_LIFT;
   }
 }

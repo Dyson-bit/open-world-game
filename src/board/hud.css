@@ -60,14 +60,23 @@ html, body {
 /* While the title card is up, the in-game HUD is not. */
 #hud.hud-titled .hud-game { display: none; }
 
+/* The fill, the edge and the drop shadow are the panel; every one of the five panels is legible
+   with no blur at all. T12: the blur is an enhancement on top, so it only applies where the
+   browser actually supports it — an unsupported backdrop-filter is otherwise a silently dropped
+   declaration on some engines and a full-cost composited layer on others. */
 .hud-panel {
   background: var(--hud-panel);
   border: 1px solid var(--hud-panel-edge);
   border-radius: var(--hud-radius);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   box-shadow: var(--hud-drop);
   color: var(--hud-ink);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .hud-panel {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
 }
 
 /* ------------------------------------------------------------------ status (top-left) */
