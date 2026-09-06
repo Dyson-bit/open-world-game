@@ -56,7 +56,7 @@ const props = buildProps(view, gd, b);
 const cars = createCars(view, gd, b);
 const character = createCharacter(view, gd, b);
 const particles = createParticles(view, gd, b);
-const hud = createHud(hudRoot, gd, b, { nohud });
+const hud = createHud(hudRoot, gd, b, { hidden: nohud });
 const audio = createAudio(gd, b);
 attachInput(canvas, gd, b, { onFirstGesture: firstGesture });
 
@@ -135,7 +135,8 @@ function titleCamera(dt) {
 }
 
 // The first click or keypress: start the audio context (which needs a gesture) and drop the title.
-// autostart=1 skips the title, so the unlock has to hang off the gesture itself, not off start().
+// The unlock hangs off the gesture, not off start(): autostart=1 makes start() a no-op, and start()
+// is also reachable from the debug API with no gesture behind it, where unlocking would be pointless.
 function firstGesture() {
   audio.unlock();
   start();
@@ -156,7 +157,6 @@ function start() {
   gd.camFree = 0;
   gd.camInit = 0;     // the chase camera snaps on its next update instead of springing from the orbit
   acc = 0;
-  audio.unlock();
   showTitle(hud, false);
 }
 

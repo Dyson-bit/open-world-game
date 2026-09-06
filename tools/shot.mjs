@@ -5,8 +5,12 @@
 //                       [--script "cmd;cmd;..."] [--freecam "x,y,z,lx,ly,lz"]
 //
 // Starts tools/serve.js on a free port, opens the page headless with SwiftShader, waits for
-// __game.ready, drives the game through the debug API, screenshots, prints __game.state() as JSON
-// and exits 1 if the page logged any error.
+// __game.ready, drives the game through the debug API, screenshots, asserts the HUD is in the page,
+// prints __game.state() as JSON and exits 1 if the page logged any error or the HUD is wrong.
+//
+// The HUD assertion stands in for the DOM unit test the plan skips: after the screenshot the page is
+// asked for the elements the Board is supposed to have built. With nohud=1 only #hud is required,
+// and it must actually be display:none.
 //
 // --script commands (unknown commands throw):
 //   ticks N                 run N fixed ticks, then one frame
@@ -155,6 +159,48 @@ async function runCommand(page, c) {
   }
 }
 
+// Runs in the page. `nohud` → only #hud is required, and it must be display:none.
+function checkHud(nohud) {
+  const wanted = {
+    hud: '#hud',
+    panel: '#hud .hud-tl',
+    carName: '#hud .hud-carname',
+    speed: '#hud .hud-speed',
+    damageBar: '#hud .hud-dmg .hud-dmg-fill',
+    counters: '#hud .hud-tr .hud-pill-v',
+    prompt: '#hud .hud-slot .hud-prompt',
+    warning: '#hud .hud-warn',
+    hint: '#hud .hud-hint',
+    flash: '#hud .hud-flash',
+    title: '#hud .hud-title',
+    titleName: '#hud .hud-title-name',
+  };
+  const found = [];
+  const problems = [];
+  const root = document.querySelector('#hud');
+  if (!root) {
+    problems.push('#hud is not in the page');
+    return { found, problems };
+  }
+  found.push('hud');
+  if (nohud) {
+    if (getComputedStyle(root).display !== 'none') problems.push('nohud=1 but #hud is still displayed');
+    return { found, problems };
+  }
+  for (const key in wanted) {
+    if (key === 'hud') continue;
+    if (document.querySelector(wanted[key])) found.push(key);
+    else problems.push(`missing ${key} ("${wanted[key]}")`);
+  }
+  return { found, problems };
+}
+
+// Same last-occurrence-wins rule main.js uses, so an override in --url is what gets read here too.
+function lastParam(fullUrl, name) {
+  const all = new URL(fullUrl).searchParams.getAll(name);
+  return all.length ? all[all.length - 1] : null;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const script = args.script ? parseScript(args.script) : null;
@@ -204,6 +250,11 @@ async function main() {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     await page.screenshot({ path: out });
 
+    const noHud = lastParam(url, 'nohud') === '1';
+    const hudCheck = await page.evaluate(checkHud, noHud);
+    if (hudCheck.found.length) console.log(`shot: hud ok — ${hudCheck.found.join(', ')}`);
+    for (const problem of hudCheck.problems) errors.push('hud: ' + problem);
+
     state = await page.evaluate(() => window.__game.state());
     console.log(`shot: wrote ${path.relative(root, out)} (${args.w}x${args.h})`);
   } finally {
@@ -214,7 +265,7 @@ async function main() {
 
   if (state) console.log(JSON.stringify(state));
   if (errors.length) {
-    console.error(`shot: ${errors.length} page error(s)`);
+    console.error(`shot: ${errors.length} problem(s)`);
     process.exitCode = 1;
   }
 }

@@ -24,7 +24,7 @@ const OUCH_TIME = 1;        // seconds "OUCH" stays up after being flung
 const FLASH_DECAY = 2.2;    // impact flash opacity per second
 
 export function createHud(root, gd, b, opts) {
-  const hidden = !!(opts && (opts.hidden || opts.nohud));
+  const hidden = !!(opts && opts.hidden);
 
   const hud = {
     root: root,
