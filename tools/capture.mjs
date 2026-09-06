@@ -264,6 +264,22 @@ async function runScenarios(page, args, report) {
   pk = await peek();
   check(wreck, 'the car is burning', s.health <= 0 && pk.carState === CAR_STATE.BURNING,
     `health=${s.health}, carState=${STATE_NAME[pk.carState]} after ${burnTicks} ticks`);
+  // A fixed free camera for the whole burning -> explosion -> wreck triptych, planted the moment
+  // the car is confirmed burning: 16 m from the car along its own forward rotated 35 deg, so the
+  // flash and the fireball read from the side instead of dead ahead, and all three frames share one
+  // consistent angle instead of jump-cutting between them.
+  // -35 deg, not +35: at this crash spot (seed 7) the car ends up hard against a block of
+  // buildings and +35 plants the camera 4 m from a tower's west face, staring into the wall
+  // instead of the wreck (checked with the colMinX/Z grid: +35 -> 4.1 m to the nearest building,
+  // -35 -> 10.2 m clear). The brief fixes the angle's magnitude, not which side it falls on.
+  await ev(() => {
+    const gd = window.__game.gd, c = gd.playerCar;
+    const carX = gd.carX[c], carZ = gd.carZ[c], yaw = gd.carYaw[c];
+    const camYaw = yaw - 35 * Math.PI / 180;
+    const dx = Math.sin(camYaw), dz = Math.cos(camYaw);
+    window.__game.setFreeCamera(carX - dx * 16, 5, carZ - dz * 16, carX, 1.2, carZ);
+  });
+  wreck.note = 'burning/explosion/wreck frames use a fixed free camera 16 m from the car';
   // burnTime is 3 s = 180 ticks. peek tells us exactly how many are left, so the burning frame is
   // 4 ticks before the blast and the explosion frame 7 after it, whatever chunk found the fire.
   const toBlast = pk.burnTicks;
@@ -287,17 +303,8 @@ async function runScenarios(page, args, report) {
   check(wreck, 'the blast threw the player out',
     s.playerMode === PLAYER_MODE.FLUNG || s.playerMode === PLAYER_MODE.STUNNED || s.playerMode === PLAYER_MODE.FOOT,
     `playerMode=${modeName(s.playerMode)} (was IN_CAR)`);
-  // Reverse angle: the chase camera is looking the way the blast threw him, i.e. away from the
-  // wreck, so the frame that is supposed to show the wreck is framed to show it.
-  await ev((c) => {
-    const gd = window.__game.gd;
-    let dx = gd.playerX - gd.carX[c], dz = gd.playerZ - gd.carZ[c];
-    const d = Math.sqrt(dx * dx + dz * dz) || 1;
-    dx /= d; dz /= d;
-    window.__game.setFreeCamera(gd.playerX + dx * 11, 4.5, gd.playerZ + dz * 11, gd.carX[c], 1.2, gd.carZ[c]);
-  }, firstCar);
-  await ev(() => window.__game.render());
-  wreck.note = 'the wreck frame is a reverse angle (setFreeCamera behind the player, looking back at the wreck) — the chase camera faces the way he was thrown';
+  // Same free camera as 'burning' and 'explosion' — no re-aim here, that is the point of the
+  // triptych (see wreck.note above).
   await shot(wreck, 'wreck');
   await ev(() => window.__game.clearFreeCamera());
   wreck.state = s;

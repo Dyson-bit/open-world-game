@@ -43,6 +43,11 @@ const FIRE_LIFE = 0.45;
 const SMOULDER_RATE = 3;
 const DRIFT_DUST_RATE = 22;    // per rear wheel. The spec's 8 is one puff every eighth of a
                                // second per tyre, which reads as litter rather than tyre smoke.
+const DRIFT_DUST_SIZE = 0.39;  // T13: was 0.6 — 35% smaller. A real-GPU capture during a handbrake
+                               // turn showed 2-3 m cream boxes filling the lower frame.
+const DRIFT_DUST_LIFE = 0.45;  // T13: was 0.7 — a shorter life caps how far DUST_GROW can grow a
+                               // puff before it dies (impact and grass dust are untouched) and
+                               // thins how many overlap at once at the same spawn rate.
 const GRASS_DUST_RATE = 6;
 // Where the plume comes out. Height is a fraction of the car's own height rather than a constant:
 // a fixed 0.9 m bonnet line puts the whole fire INSIDE a 3 m bus, where the chase camera can never
@@ -83,7 +88,9 @@ const SMOKE_SHRINK_F = 0.25;
 const SMOKE_SHRINK = 1.4;
 const SMOKE_MIN = 0.05;
 const DUST_GROW = 0.9;
-const SHOCK_GROW = 37;         // 1 m -> 14 m over the ring's 0.35 s life
+const SHOCK_GROW = 37;         // radius growth rate; SHOCK_MAX_SIZE caps it before the ring's
+                                // 0.35 s life is up (was allowed to reach ~14 m — a beige carpet)
+const SHOCK_MAX_SIZE = 10;     // T13: was uncapped (effectively ~14 m)
 const SMOKE_BUOY = 0.6;
 const SMOKE_DRAG = 0.96;       // horizontal only: the plume stalls where it was made and trails
 const SMOKE_DRAG_Y = 0.995;    // ...but keeps climbing, which is what makes it read as a column
@@ -312,7 +319,7 @@ function spawnFromCars(gd, b) {
           spawnParticle(gd, b, PARTICLE.DUST,
             px + (gd.rand() - 0.5) * 0.4, 0.15, pz + (gd.rand() - 0.5) * 0.4,
             (gd.rand() - 0.5) * 1.5, 0.6 + gd.rand() * 0.8, (gd.rand() - 0.5) * 1.5,
-            0.7, 0.6, 0.85, 0.78, 0.65);
+            DRIFT_DUST_LIFE, DRIFT_DUST_SIZE, 0.85, 0.78, 0.65);
         } else {
           spawnParticle(gd, b, PARTICLE.DUST,
             px + (gd.rand() - 0.5) * 0.5, 0.15, pz + (gd.rand() - 0.5) * 0.5,
@@ -448,6 +455,7 @@ function integrate(gd, b) {
       vx *= SPARK_DRAG; vy *= SPARK_DRAG; vz *= SPARK_DRAG;
     } else if (type === PARTICLE.SHOCK) {
       size += SHOCK_GROW * dt;
+      if (size > SHOCK_MAX_SIZE) size = SHOCK_MAX_SIZE;
     } else {
       vy -= g;                                  // DEBRIS and GLASS are just lumps
     }

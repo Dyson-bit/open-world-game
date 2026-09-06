@@ -50,6 +50,14 @@ const TUMBLE = 1.2;                  // radians per second of particle tumble
 const FIRE_G = 0.95;
 const FIRE_B = 0.55;
 
+// SHOCK ring: T13 — a cream-and-near-opaque disc read as a beige carpet swamping the explosion
+// frame. It now starts as an orange-yellow heat flash (ignoring the particle's own pR/pG/pB,
+// the same trick FIRE_G/FIRE_B use above) and fades toward the fog colour as it dies.
+const SHOCK_R = 1.0;
+const SHOCK_G = 0.72;
+const SHOCK_B = 0.3;
+const SHOCK_OPACITY = 0.45;   // was 0.85 — a brief flash, not a solid disc
+
 export function createParticles(view, gd, b) {
   // ---- boxes -------------------------------------------------------------
   const boxGeo = new BoxGeometry(1, 1, 1);
@@ -81,7 +89,7 @@ export function createParticles(view, gd, b) {
   const ringGeo = new RingGeometry(0.7, 1, 40);
   ringGeo.rotateX(-Math.PI / 2);                                       // lying flat, facing up
   const ringMat = new MeshBasicMaterial({
-    transparent: true, opacity: 0.85, depthWrite: false, side: DoubleSide,
+    transparent: true, opacity: SHOCK_OPACITY, depthWrite: false, side: DoubleSide,
   });
   const ringCap = b.maxExplosions * 2;
   const rings = new InstancedMesh(ringGeo, ringMat, ringCap);
@@ -149,7 +157,7 @@ function writeParticles(fx, gd, b) {
       _scl.set(s, 1, s);
       _m4.compose(_pos, _quat, _scl);
       rings.setMatrixAt(ringCount, _m4);
-      _col.setRGB(gd.pR[i], gd.pG[i], gd.pB[i], SRGBColorSpace);
+      _col.setRGB(SHOCK_R, SHOCK_G, SHOCK_B, SRGBColorSpace);
       _col.lerp(_fog, (1 - f) * 0.7);
       rings.setColorAt(ringCount, _col);
       ringCount++;
