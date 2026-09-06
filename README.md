@@ -2,6 +2,8 @@
 
 Steal. Drive. Wreck. Repeat.
 
+**Play it:** https://nitzan.games/experiments/one-shot-gta/fable-xhigh/index.html — one of three builds of the same one-shot prompt compared at https://nitzan.games/OneShotGTA.html. Built autonomously by Claude Fable 5.1 at extra-high effort on 2026-09-05.
+
 Joyride is a browser open-world driving sandbox. You start on foot in a small sunlit city at golden
 hour, walk to any car on the street and take it, drive it through traffic as fast as it will go,
 crash it into whatever is in the way, and get out before it explodes — then walk to the next one.
