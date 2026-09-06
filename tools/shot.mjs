@@ -1,8 +1,13 @@
 #!/usr/bin/env node
-// One-shot screenshot tool.
+// One-shot screenshot tool — and the shared browser plumbing tools/capture.mjs runs on.
 //
 //   node tools/shot.mjs [--url "?..."] [--out captures/shot.png] [--ticks 120] [--w 1280 --h 720]
 //                       [--script "cmd;cmd;..."] [--freecam "x,y,z,lx,ly,lz"]
+//
+// Everything below the "shared helpers" banner is exported: startServer / launchBrowser /
+// openGame / checkHud / gameUrl / parseScript / runCommand. capture.mjs imports them, so the two
+// tools open the page the same way (same flags, same collectors) and only one of them owns that
+// knowledge. main() runs only when this file is the entry point, never on import.
 //
 // Starts tools/serve.js on a free port, opens the page headless with SwiftShader, waits for
 // __game.ready, drives the game through the debug API, screenshots, asserts the HUD is in the page,
@@ -27,8 +32,9 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import { createServer } from './serve.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const HELD_KEYS = ['forward', 'back', 'left', 'right', 'handbrake'];
+export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const HELD_KEYS = ['forward', 'back', 'left', 'right', 'handbrake'];
+export const CHROME_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'];
 
 function parseArgs(argv) {
   const a = { url: '', out: 'captures/shot.png', ticks: 120, w: 1280, h: 720, script: '', freecam: '' };
@@ -70,7 +76,7 @@ function arity(args, n, where) {
   if (args.length !== n) throw new Error(`shot: "${where}" takes ${n} argument(s), got ${args.length}`);
 }
 
-function parseScript(src) {
+export function parseScript(src) {
   const out = [];
   for (const raw of src.split(';')) {
     const s = raw.trim();
@@ -117,7 +123,7 @@ function parseScript(src) {
   return out;
 }
 
-async function runCommand(page, c) {
+export async function runCommand(page, c) {
   switch (c.cmd) {
     case 'ticks':
       await page.evaluate((n) => window.__game.step(n), c.n);
@@ -160,7 +166,7 @@ async function runCommand(page, c) {
 }
 
 // Runs in the page. `nohud` → only #hud is required, and it must be display:none.
-function checkHud(nohud) {
+export function checkHud(nohud) {
   const wanted = {
     hud: '#hud',
     panel: '#hud .hud-tl',
@@ -196,40 +202,77 @@ function checkHud(nohud) {
 }
 
 // Same last-occurrence-wins rule main.js uses, so an override in --url is what gets read here too.
-function lastParam(fullUrl, name) {
+export function lastParam(fullUrl, name) {
   const all = new URL(fullUrl).searchParams.getAll(name);
   return all.length ? all[all.length - 1] : null;
 }
 
+// ---------------------------------------------------------------- shared helpers
+// Used by main() below and imported by tools/capture.mjs. Nothing here writes to stdout.
+
+// A server on a free loopback port. Returns { server, port }; close it with server.close().
+export async function startServer() {
+  const server = createServer();
+  await new Promise((res) => server.listen(0, '127.0.0.1', res));
+  return { server, port: server.address().port };
+}
+
+export function launchBrowser() {
+  return puppeteer.launch({ headless: true, args: CHROME_ARGS });
+}
+
+// The page URL: the harness base (headless + autostart + seed) plus whatever `extra` asks for.
+// main.js reads the LAST occurrence of a param, so anything in `extra` overrides the base.
+export function gameUrl(port, extra, seed) {
+  let e = (extra || '').trim();
+  while (e.startsWith('?') || e.startsWith('&')) e = e.slice(1);
+  const s = seed === undefined ? 7 : seed;
+  return `http://127.0.0.1:${port}/?headless=1&autostart=1&seed=${s}${e ? '&' + e : ''}`;
+}
+
+// Opens the game and waits for the first rendered frame. `errors` collects page errors, console
+// errors and failed requests; `warnings` collects console.warn. Both arrays keep filling as the
+// caller drives the page, so read them at the end of the run.
+export async function openGame(browser, url, opts) {
+  const o = opts || {};
+  const errors = o.errors || [];
+  const warnings = o.warnings || [];
+  const page = await browser.newPage();
+  await page.setViewport({ width: o.w || 1280, height: o.h || 720, deviceScaleFactor: 1 });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + (e && e.message ? e.message : String(e))));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push('console.error: ' + m.text());
+    else if (m.type() === 'warning') warnings.push('console.warn: ' + m.text());
+  });
+  page.on('requestfailed', (r) => errors.push('requestfailed: ' + r.url()));
+
+  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+  await page.waitForFunction(() => !!(window.__game && window.__game.ready), { timeout: 30000 });
+  await page.evaluate(() => window.__game.ready);
+  return { page, errors, warnings };
+}
+
+// Screenshot to a path relative to the repo root; makes the directory. Returns the absolute path.
+export async function screenshot(page, outPath) {
+  const out = path.isAbsolute(outPath) ? outPath : path.resolve(root, outPath);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  await page.screenshot({ path: out });
+  return out;
+}
+
+// ---------------------------------------------------------------- the tool
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const script = args.script ? parseScript(args.script) : null;
 
-  const server = createServer();
-  await new Promise((res) => server.listen(0, '127.0.0.1', res));
-  const port = server.address().port;
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
-  });
+  const { server, port } = await startServer();
+  const browser = await launchBrowser();
 
   const errors = [];
   let state = null;
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: args.w, height: args.h, deviceScaleFactor: 1 });
-    page.on('pageerror', (e) => errors.push('pageerror: ' + (e && e.message ? e.message : String(e))));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push('console.error: ' + m.text()); });
-    page.on('requestfailed', (r) => errors.push('requestfailed: ' + r.url()));
-
-    let extra = args.url.trim();
-    while (extra.startsWith('?') || extra.startsWith('&')) extra = extra.slice(1);
-    const url = `http://127.0.0.1:${port}/?headless=1&autostart=1&seed=7${extra ? '&' + extra : ''}`;
-
-    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
-    await page.waitForFunction(() => !!(window.__game && window.__game.ready), { timeout: 30000 });
-    await page.evaluate(() => window.__game.ready);
+    const url = gameUrl(port, args.url, 7);
+    const { page } = await openGame(browser, url, { w: args.w, h: args.h, errors });
 
     if (args.freecam) {
       const v = args.freecam.split(',').map(Number);
@@ -246,9 +289,7 @@ async function main() {
       await page.evaluate((n) => window.__game.step(n), args.ticks);
     }
 
-    const out = path.resolve(root, args.out);
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    await page.screenshot({ path: out });
+    const out = await screenshot(page, args.out);
 
     const noHud = lastParam(url, 'nohud') === '1';
     const hudCheck = await page.evaluate(checkHud, noHud);
@@ -270,7 +311,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err && err.stack ? err.stack : String(err));
-  process.exitCode = 1;
-});
+// Only when this file is the entry point: importing it (capture.mjs does) must not take a shot.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err && err.stack ? err.stack : String(err));
+    process.exitCode = 1;
+  });
+}

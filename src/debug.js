@@ -33,7 +33,20 @@ export function installDebug(api) {
       nearestCar: gd.nearestCar,
       health: pc >= 0 ? round3(gd.carHealth[pc]) : -1,
       speed: pc >= 0 ? round3(Math.abs(gd.carSpeedF[pc])) : 0,
+      // added T11: three.js draw calls for the last rendered frame, for the capture harness's
+      // perf scenario. renderer.info.render.calls is reset by three at the start of each render,
+      // so this is the count for the frame the last step()/render() drew.
+      drawCalls: api.view && api.view.renderer ? api.view.renderer.info.render.calls : -1,
     };
+  };
+
+  // First car index for which pred(i, gd) is true, else -1 (spec §8). The predicate runs in the
+  // page, so a harness passes it as a string or a function via page.evaluate.
+  api.findCar = function findCar(pred) {
+    for (let i = 0; i < gd.carCount; i++) {
+      if (pred(i, gd)) return i;
+    }
+    return -1;
   };
 
   // Held keys persist until changed. `action: true` (or camToggle/mute) sets the one-tick edge.
