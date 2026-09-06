@@ -211,9 +211,15 @@ export function lastParam(fullUrl, name) {
 // Used by main() below and imported by tools/capture.mjs. Nothing here writes to stdout.
 
 // A server on a free loopback port. Returns { server, port }; close it with server.close().
+// listen() reports failure as an 'error' event, not a throw, so without that listener a port that
+// cannot be bound would leave the caller awaiting a promise that never settles.
 export async function startServer() {
   const server = createServer();
-  await new Promise((res) => server.listen(0, '127.0.0.1', res));
+  await new Promise((res, rej) => {
+    const onError = (err) => rej(err);
+    server.once('error', onError);
+    server.listen(0, '127.0.0.1', () => { server.removeListener('error', onError); res(); });
+  });
   return { server, port: server.address().port };
 }
 
