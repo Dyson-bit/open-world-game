@@ -86,12 +86,12 @@ export function createHud(root, gd, b, opts) {
   // ---- title card (its own layer; the game HUD is hidden while it is up)
   hud.titleEl = div('hud-title', root);
   const block = div('hud-title-block', hud.titleEl);
-  div('hud-title-name', block).textContent = 'JOYRIDE';
-  div('hud-title-rule', block);
-  div('hud-title-sub', block).textContent = 'STEAL · DRIVE · WRECK · REPEAT';
+ div('hud-title-name', block).textContent = 'OPEN WORLD';
+div('hud-title-rule', block);
+div('hud-title-sub', block).textContent = 'EXPLORE · DRIVE · DISCOVER';
   const foot = div('hud-title-foot', hud.titleEl);
   const start = div('hud-title-start hud-panel', foot);
-  start.textContent = 'CLICK OR PRESS ANY KEY TO START';
+  start.textContent = 'PULSA CUALQUIER TECLA PARA JUGAR';
   fillHint(div('hud-title-controls hud-panel', foot));
   hud.titleEl.hidden = true;
 
