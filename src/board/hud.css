@@ -2,17 +2,19 @@
    No external fonts, no images: everything must work offline. */
 
 :root {
-  --hud-ink: #fff4e0;
-  --hud-accent: #ff8a3d;
-  --hud-panel: rgba(20, 24, 40, 0.55);
-  --hud-panel-edge: rgba(255, 244, 224, 0.14);
-  --hud-radius: 14px;
-  --hud-shadow: 0 2px 0 rgba(8, 10, 20, 0.45), 0 0 16px rgba(6, 8, 18, 0.35);
-  --hud-drop: 0 6px 22px rgba(6, 8, 18, 0.35);
-  --hud-font: "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
-  --hud-ok: #5fd48a;
-  --hud-warn: #ffc24a;
-  --hud-bad: #ff4d3d;
+  
+:root {
+  --hud-ink: #ffffff;
+  --hud-accent: #00aaff;
+  --hud-panel: rgba(10, 15, 25, 0.78);
+  --hud-panel-edge: rgba(0, 170, 255, 0.35);
+  --hud-radius: 10px;
+  --hud-shadow: 0 2px 0 rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 100, 200, 0.2);
+  --hud-drop: 0 6px 22px rgba(0, 0, 0, 0.4);
+  --hud-font: Arial, Helvetica, sans-serif;
+  --hud-ok: #39e879;
+  --hud-warn: #ffc247;
+  --hud-bad: #ff4141;
 }
 
 * { box-sizing: border-box; }
