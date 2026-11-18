@@ -60,10 +60,14 @@ export function createHud(root, gd, b, opts) {
   hud.dmgEl = div('hud-dmg hud-off', tl);
   hud.dmgFillEl = span('hud-dmg-fill', hud.dmgEl);
 
-  // ---- top-right: counters
-  const tr = div('hud-tr', game);
-  hud.stolenEl = pill(tr, 'STOLEN');
-  hud.wreckedEl = pill(tr, 'WRECKED');
+// ---- top-right: counters and money
+const tr = div('hud-tr', game);
+
+hud.moneyEl = pill(tr, 'MONEY');
+hud.moneyEl.textContent = '$0';
+
+hud.stolenEl = pill(tr, 'STOLEN');
+hud.wreckedEl = pill(tr, 'WRECKED');
 
   // ---- centre-bottom: warning / ouch / prompt (exactly one visible)
   const slot = div('hud-slot', game);
