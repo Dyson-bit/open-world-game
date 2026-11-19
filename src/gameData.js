@@ -191,9 +191,13 @@ export function allocateGameData(gd, b, seed) {
   gd.skidLastX = new Float32Array(M * 2); gd.skidLastZ = new Float32Array(M * 2); // last rear-wheel point per car (L,R)
   gd.skidActive = new Uint8Array(M * 2);
 
-  // ---------------- stats ----------------
-  gd.statStolen = 0; gd.statWrecked = 0; gd.statDistance = 0; gd.statTopSpeed = 0;
-  gd.statBigImpact = 0;   // strongest impact this frame (HUD/audio/shake)
+// ---------------- stats ----------------
+gd.money = 500;
+gd.statStolen = 0;
+gd.statWrecked = 0;
+gd.statDistance = 0;
+gd.statTopSpeed = 0;
+gd.statBigImpact = 0;
 }
 
 export function clearEvents(gd) {
