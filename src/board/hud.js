@@ -142,10 +142,15 @@ export function updateHud(hud, gd, b, dtFrame) {
     last.dmgClass = cls;
   }
 
-  // ---- counters
+   // ---- counters
   if (gd.statStolen !== last.stolen) { hud.stolenEl.textContent = gd.statStolen; last.stolen = gd.statStolen; }
   if (gd.statWrecked !== last.wrecked) { hud.wreckedEl.textContent = gd.statWrecked; last.wrecked = gd.statWrecked; }
 
+  // ---- money
+  if (gd.money !== last.money) {
+    hud.moneyEl.textContent = '$' + gd.money.toLocaleString('en-US');
+    last.money = gd.money;
+  }
   // ---- "OUCH" fires on the transition into FLUNG and runs on frame time. Decay first, so the
   // frame that starts it always shows it — even a long catch-up frame (or a debug step of many
   // ticks at once), which would otherwise spend the whole timer before it was ever drawn.
