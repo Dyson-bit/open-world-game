@@ -58,7 +58,8 @@ function scanNearestCar(gd, b) {
 // ---------------------------------------------------------------- on foot
 
 function updateFoot(gd, b, inp, dt) {
-  let fx = gd.camLookX - gd.camX, fz = gd.camLookZ - gd.camZ;
+  let fx = gd.camLookX - gd.camX;
+  let fz = gd.camLookZ - gd.camZ;
   const fl = Math.sqrt(fx * fx + fz * fz);
 
   if (fl > 1e-4) {
