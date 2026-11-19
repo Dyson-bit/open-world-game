@@ -35,7 +35,7 @@ export function createHud(root, gd, b, opts) {
     // the values currently displayed; nothing is written to the DOM unless one of these moves
     last: {
       name: '', onFoot: -1, speed: -1, dmgPct: -1, dmgClass: '', dmgOff: -1,
-      stolen: -1, wrecked: -1, prompt: -1, promptName: '', flash: -1, hintFaded: -1, mode: -1,
+      stolen: -1, wrecked: -1, money: -1, prompt: -1, promptName: '', flash: -1, hintFaded: -1, mode: -1,
     },
   };
 
