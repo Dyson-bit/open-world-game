@@ -67,15 +67,24 @@ export function updateCamera(gd, b) {
     height = b.camCarHeight + (b.carHgt[T] - REF_HGT) * HEIGHT_PER_HGT;
     lookAhead = b.camCarLookAhead + b.camCarLookAheadPerSpeed * speed;
   } else {
-    tx = gd.playerX; ty = gd.playerY; tz = gd.playerZ;
+     tx = gd.playerX;
+    ty = gd.playerY;
+    tz = gd.playerZ;
     speed = gd.playerSpeed;
-    // On foot the forward is wherever the camera already is relative to the player, so standing
-    // still lets you look at him from wherever you dragged the camera to. It only creeps around
-    // behind him while he is actually walking.
-    let fx = tx - gd.camX, fz = tz - gd.camZ;
+
+    // Mantener la dirección actual de la cámara al caminar.
+    let fx = tx - gd.camX;
+    let fz = tz - gd.camZ;
+
     const fl = Math.sqrt(fx * fx + fz * fz);
-    if (fl > 1e-4) { fx /= fl; fz /= fl; } else { fx = gd.camFwdX; fz = gd.camFwdZ; }
-  
+
+    if (fl > 1e-4) {
+      fx /= fl;
+      fz /= fl;
+    } else {
+      fx = gd.camFwdX;
+      fz = gd.camFwdZ;
+      
     }
     gd.camFwdX = fx;
     gd.camFwdZ = fz;
