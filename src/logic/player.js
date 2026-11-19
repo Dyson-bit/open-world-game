@@ -14,6 +14,7 @@ import { pushOutCircle } from './collision.js';
 const TWO_PI = Math.PI * 2;
 const YAW_EASE = 14;        // how fast the body swings to face the walk direction, per second
 const WALK_PHASE_RATE = 1.6;
+const JUMP_FORCE = 7;
 const TUMBLE_RATE = 9;      // radians per second while flung
 const ENGINE_BRAKE = -0.12; // throttle applied against the direction of travel when coasting
 const COAST_DEADBAND = 0.5; // below this speed the engine lets go entirely
@@ -102,9 +103,21 @@ function updateFoot(gd, b, inp, dt) {
     if (into < 0) { vx -= ux * into; vz -= uz * into; }
   }
 
-  gd.playerX = nx; gd.playerZ = nz; gd.playerY = 0;
-  gd.playerVX = vx; gd.playerVZ = vz; gd.playerVY = 0;
+  gd.playerX = nx; gd.playerZ = nz;
+gd.playerVX = vx; gd.playerVZ = vz;
 
+// Salto
+if (inp.jump && gd.playerY <= 0) {
+  gd.playerVY = JUMP_FORCE;
+}
+
+gd.playerVY -= b.gravity * dt;
+gd.playerY += gd.playerVY * dt;
+
+if (gd.playerY < 0) {
+  gd.playerY = 0;
+  gd.playerVY = 0;
+}
   const sp = Math.sqrt(vx * vx + vz * vz);
   gd.playerSpeed = sp;
   if (sp > 0.5) {
