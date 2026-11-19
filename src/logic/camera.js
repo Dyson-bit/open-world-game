@@ -66,8 +66,8 @@ export function updateCamera(gd, b) {
     dist = b.camCarDist + b.camCarDistPerSpeed * speed + (b.carLen[T] - REF_LEN) * DIST_PER_LEN;
     height = b.camCarHeight + (b.carHgt[T] - REF_HGT) * HEIGHT_PER_HGT;
     lookAhead = b.camCarLookAhead + b.camCarLookAheadPerSpeed * speed;
-  } else {
-     tx = gd.playerX;
+    } else {
+    tx = gd.playerX;
     ty = gd.playerY;
     tz = gd.playerZ;
     speed = gd.playerSpeed;
@@ -84,15 +84,15 @@ export function updateCamera(gd, b) {
     } else {
       fx = gd.camFwdX;
       fz = gd.camFwdZ;
-      
     }
+
     gd.camFwdX = fx;
     gd.camFwdZ = fz;
+
     dist = b.camFootDist;
     height = b.camFootHeight;
     lookAhead = FOOT_LOOK_AHEAD;
   }
-
   if (gd.camMode === 1) { dist *= MODE_FAR_DIST; height *= MODE_FAR_HEIGHT; }
 
   // ---- mouse orbit: yaw around the target, pitch up and over it, both let go once you move ----
