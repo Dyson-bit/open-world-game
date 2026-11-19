@@ -14,8 +14,7 @@ import { gridIndex } from './city.js';
 
 const TWO_PI = Math.PI * 2;
 const ORBIT_PER_PIXEL = 0.005;
-const PITCH_LIMIT = 0.5;
-const FOOT_FWD_EASE = 0;      // how fast the on-foot camera swings behind the walk direction
+const PITCH_LIMIT = 0.5;      // how fast the on-foot camera swings behind the walk direction
 const LOOK_SPRING = 1.5;        // the aim is tighter than the body, so the subject stays centred
 const FOV_EASE = 3;
 const FOV_SPEED_FULL = 35;      // speed at which the FOV reaches camFovMax
@@ -91,7 +90,7 @@ export function updateCamera(gd, b) {
 
     dist = b.camFootDist;
     height = b.camFootHeight;
-    lookAhead = FOOT_LOOK_AHEAD;
+    const FOOT_LOOK_AHEAD = 2;
   }
   if (gd.camMode === 1) { dist *= MODE_FAR_DIST; height *= MODE_FAR_HEIGHT; }
 
