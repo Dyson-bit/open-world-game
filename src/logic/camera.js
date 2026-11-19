@@ -14,14 +14,14 @@ import { gridIndex } from './city.js';
 
 const TWO_PI = Math.PI * 2;
 const ORBIT_PER_PIXEL = 0.005;
-const PITCH_LIMIT = 0.5;      // how fast the on-foot camera swings behind the walk direction
-const LOOK_SPRING = 1.5;        // the aim is tighter than the body, so the subject stays centred
+const PITCH_LIMIT = 0.5;
+const FOOT_LOOK_AHEAD = 2;
+const LOOK_SPRING = 1.5;
 const FOV_EASE = 3;
-const FOV_SPEED_FULL = 35;      // speed at which the FOV reaches camFovMax
+const FOV_SPEED_FULL = 35;
 const MODE_FAR_DIST = 1.7;
 const MODE_FAR_HEIGHT = 1.6;
-const REVERSE_HOLD = -2;        // below this forward speed the camera keeps its old forward
-// balance's camCarDist / camCarHeight are the pose for a mid-size saloon; these scale it to the
+const REVERSE_HOLD = -2;// balance's camCarDist / camCarHeight are the pose for a mid-size saloon; these scale it to the
 // body actually being driven. Without them the bus (11 m long, 3 m tall) puts the camera four
 // metres off its rear bumper with the lens level with its roof, and the road ahead is a wall of
 // orange. Reference car is the CRUISER, so a CRUISER gets exactly the balance numbers.
