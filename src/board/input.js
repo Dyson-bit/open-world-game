@@ -23,7 +23,11 @@ export function attachInput(canvas, gd, b, opts) {
       case 'KeyS': case 'ArrowDown': inp.back = 1; e.preventDefault(); break;
       case 'KeyA': case 'ArrowLeft': inp.left = 1; e.preventDefault(); break;
       case 'KeyD': case 'ArrowRight': inp.right = 1; e.preventDefault(); break;
-      case 'Space': inp.handbrake = 1; e.preventDefault(); break;
+      case 'Space':
+  inp.handbrake = 1;
+  if (!e.repeat) inp.jump = 1;
+  e.preventDefault();
+  break;
       case 'ShiftLeft': case 'ShiftRight':
   inp.run = 1;
   break;
@@ -42,8 +46,13 @@ export function attachInput(canvas, gd, b, opts) {
       case 'KeyA': case 'ArrowLeft': inp.left = 0; break;
       case 'KeyD': case 'ArrowRight': inp.right = 0; break;
       case 'Space': inp.handbrake = 0; break;
+      case 'Space':
+  inp.handbrake = 0;
+  inp.jump = 0;
+  break;
       case 'ShiftLeft': case 'ShiftRight':
   inp.run = 0;
+  inp.jump = 0;
   break;
       default: break;
     }
