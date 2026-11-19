@@ -15,7 +15,7 @@ import { gridIndex } from './city.js';
 const TWO_PI = Math.PI * 2;
 const ORBIT_PER_PIXEL = 0.005;
 const PITCH_LIMIT = 0.5;
-const FOOT_LOOK_AHEAD = 2;
+const FOOT_FWD_EASE = 0;
 const FOOT_FWD_EASE = 2.5;      // how fast the on-foot camera swings behind the walk direction
 const LOOK_SPRING = 1.5;        // the aim is tighter than the body, so the subject stays centred
 const FOV_EASE = 3;
@@ -76,13 +76,7 @@ export function updateCamera(gd, b) {
     let fx = tx - gd.camX, fz = tz - gd.camZ;
     const fl = Math.sqrt(fx * fx + fz * fz);
     if (fl > 1e-4) { fx /= fl; fz /= fl; } else { fx = gd.camFwdX; fz = gd.camFwdZ; }
-    if (speed > 0.5) {
-      let k = FOOT_FWD_EASE * dt;
-      if (k > 1) k = 1;
-      fx += (Math.sin(gd.playerYaw) - fx) * k;
-      fz += (Math.cos(gd.playerYaw) - fz) * k;
-      const l = Math.sqrt(fx * fx + fz * fz);
-      if (l > 1e-4) { fx /= l; fz /= l; }
+  
     }
     gd.camFwdX = fx;
     gd.camFwdZ = fz;
