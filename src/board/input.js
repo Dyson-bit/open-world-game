@@ -57,7 +57,6 @@ export function attachInput(canvas, gd, b, opts) {
   inp.handbrake = 0;
   inp.run = 0;
 }
-  }
 
   function onPointerDown(e) {
     firstGesture();
