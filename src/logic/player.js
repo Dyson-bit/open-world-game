@@ -103,9 +103,23 @@ function updateFoot(gd, b, inp, dt) {
     if (into < 0) { vx -= ux * into; vz -= uz * into; }
   }
 
-  gd.playerX = nx; gd.playerZ = nz;
-gd.playerVX = vx; gd.playerVZ = vz;
+  gd.playerX = nx;
+gd.playerZ = nz;
+gd.playerVX = vx;
+gd.playerVZ = vz;
 
+// Salto
+if (inp.jump && gd.playerY <= 0) {
+  gd.playerVY = JUMP_FORCE;
+}
+
+gd.playerVY -= b.gravity * dt;
+gd.playerY += gd.playerVY * dt;
+
+if (gd.playerY < 0) {
+  gd.playerY = 0;
+  gd.playerVY = 0;
+}
 // Salto
 if (inp.jump && gd.playerY <= 0) {
   gd.playerVY = JUMP_FORCE;
