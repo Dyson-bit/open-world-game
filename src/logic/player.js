@@ -111,6 +111,7 @@ gd.playerVZ = vz;
 // Salto
 if (inp.jump && gd.playerY <= 0) {
   gd.playerVY = JUMP_FORCE;
+  inp.jump = 0;
 }
 
 gd.playerVY -= b.gravity * dt;
@@ -154,6 +155,7 @@ if (gd.playerY < 0) {
 
 function updateInCar(gd, b, inp, dt) {
   const c = gd.playerCar;
+  inp.jump = 0;
   if (c < 0) { gd.playerMode = PLAYER_MODE.FOOT; return; }
 
   gd.carSteerIn[c] = inp.left - inp.right;       // A steers LEFT, which raises yaw (spec §3)
