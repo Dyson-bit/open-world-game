@@ -152,7 +152,17 @@ function updateInCar(gd, b, inp, dt) {
   const a = speedF < 0 ? -speedF : speedF;
   gd.playerSpeed = a;
   gd.statDistance += a * dt;
-  if (a > gd.statTopSpeed) gd.statTopSpeed = a;
+
+// Money rewards: $50 every 100 meters driven
+gd.moneyDistance += a * dt;
+
+if (gd.moneyDistance >= 100) {
+  const rewards = Math.floor(gd.moneyDistance / 100);
+  gd.money += rewards * 50;
+  gd.moneyDistance -= rewards * 100;
+}
+
+if (a > gd.statTopSpeed) gd.statTopSpeed = a;
 
   if (inp.action) exitCar(gd, b);
 }
