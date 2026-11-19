@@ -77,7 +77,8 @@ function updateFoot(gd, b, inp, dt) {
 
   // Accelerate toward the wanted velocity at playerAccel m/s^2 — a cap on the change, not a lerp,
   // so stopping is as brisk as starting and neither depends on the frame rate.
-  const tvx = dx * b.playerSpeed, tvz = dz * b.playerSpeed;
+  const runSpeed = inp.run ? b.playerSpeed * 1.7 : b.playerSpeed;
+  const tvx = dx * runSpeed, tvz = dz * runSpeed;
   let ax = tvx - gd.playerVX, az = tvz - gd.playerVZ;
   const al = Math.sqrt(ax * ax + az * az);
   const step = b.playerAccel * dt;
