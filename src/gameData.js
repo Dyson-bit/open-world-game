@@ -193,12 +193,13 @@ export function allocateGameData(gd, b, seed) {
 
 // ---------------- stats ----------------
 gd.money = 500;
+gd.moneyDistance = 0;
+
 gd.statStolen = 0;
 gd.statWrecked = 0;
 gd.statDistance = 0;
 gd.statTopSpeed = 0;
-gd.statBigImpact = 0;
-}
+gd.statBigImpact = 0;}
 
 export function clearEvents(gd) {
   gd.impCount = 0; gd.impTickStart = 0;
